@@ -2,10 +2,15 @@ import nodemailer, { SentMessageInfo } from "nodemailer";
 
 // Create transporter with Google SMTP
 const transporter = nodemailer.createTransport({
-  service: "gmail",
+  host: process.env.MAIL_SERVICE,
+  port: 465,
+  secure: true,
   auth: {
-    user: process.env.GMAIL_USER,
-    pass: process.env.GMAIL_PASS, // Use App Password if 2FA is enabled
+    user: process.env.MAIL_USER,
+    pass: process.env.MAIL_PASS,
+  },
+  tls: {
+    rejectUnauthorized: false, // Helps with self-signed certificates
   },
 });
 
