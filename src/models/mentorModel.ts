@@ -30,6 +30,19 @@ const mentorSchema = new Schema(
         return validator.isMobilePhone(value, "any");
       },
     },
+    course: {
+      type: String,
+      enum: [
+        "frontend",
+        "backend",
+        "product-management",
+        "AI-courses",
+        "quality-assurance",
+        "scrum",
+      ],
+      index: true,
+      required: true,
+    },
     password: {
       type: String,
       minlength: 8,

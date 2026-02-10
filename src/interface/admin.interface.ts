@@ -1,11 +1,13 @@
 export interface LoginRequestBody {
   email: string;
   password: string;
+  rememberMe: boolean;
 }
 
 export interface RegisterRequestBody {
   firstName: string;
   lastName: string;
+  course: string;
   email: string;
   password: string;
   phoneNumber: string;

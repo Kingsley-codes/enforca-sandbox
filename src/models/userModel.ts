@@ -43,6 +43,19 @@ const userSchema = new Schema(
       enum: ["active", "suspended"],
       default: "active",
     },
+    course: {
+      type: String,
+      enum: [
+        "frontend",
+        "backend",
+        "product-management",
+        "AI-courses",
+        "quality-assurance",
+        "scrum",
+      ],
+      index: true,
+      required: true,
+    },
     isVerified: {
       type: Boolean,
       default: false,

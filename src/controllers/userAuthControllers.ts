@@ -19,10 +19,18 @@ export const registerUser = async (
   res: Response,
 ) => {
   try {
-    const { firstName, lastName, email, password, phoneNumber } = req.body;
+    const { firstName, lastName, email, password, phoneNumber, course } =
+      req.body;
 
     // Validate user input
-    if (!email || !password || !phoneNumber || !firstName || !lastName) {
+    if (
+      !email ||
+      !password ||
+      !phoneNumber ||
+      !firstName ||
+      !lastName ||
+      !course
+    ) {
       return res.status(400).json({
         status: "fail",
         message: "All fields are required",
@@ -77,10 +85,11 @@ export const registerUser = async (
     } else {
       // Create new user
       await User.create({
-        normalizedEmail,
+        email: normalizedEmail,
         password: hashedPassword,
         firstName,
         lastName,
+        course,
         phoneNumber,
         isVerified: true,
       });
@@ -112,7 +121,7 @@ export const login = async (
   res: Response,
 ) => {
   try {
-    const { email, password } = req.body;
+    const { email, password, rememberMe } = req.body;
 
     if (!email || !password) {
       return res.status(400).json({
@@ -148,26 +157,29 @@ export const login = async (
       });
     }
 
-    const accessToken = signAccessToken(user._id.toString());
-    const refreshToken = signRefreshToken(user._id.toString());
-
     user.password = null;
 
     const isProduction = process.env.NODE_ENV === "production";
+
+    if (rememberMe) {
+      const refreshToken = signRefreshToken(user._id.toString());
+
+      res.cookie("refresh_token", refreshToken, {
+        httpOnly: true,
+        secure: isProduction,
+        sameSite: isProduction ? "none" : "lax",
+        path: "/api/auth/refresh", // very important
+        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+      });
+    }
+
+    const accessToken = signAccessToken(user._id.toString());
 
     res.cookie("access_token", accessToken, {
       httpOnly: true,
       secure: isProduction,
       sameSite: isProduction ? "none" : "lax",
       maxAge: 24 * 60 * 1000, // 15 minutes
-    });
-
-    res.cookie("refresh_token", refreshToken, {
-      httpOnly: true,
-      secure: isProduction,
-      sameSite: isProduction ? "none" : "lax",
-      path: "/api/auth/refresh", // very important
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     });
 
     return res.status(200).json({
@@ -257,7 +269,7 @@ export const mentorLogin = async (
   res: Response,
 ) => {
   try {
-    const { email, password } = req.body;
+    const { email, password, rememberMe } = req.body;
 
     if (!email || !password) {
       return res.status(400).json({
@@ -294,25 +306,28 @@ export const mentorLogin = async (
       });
     }
 
-    const accessToken = signAccessToken(mentor._id.toString());
-    const refreshToken = signRefreshToken(mentor._id.toString());
-
     mentor.password = null;
 
     const isProduction = process.env.NODE_ENV === "production";
+
+    if (rememberMe) {
+      const refreshToken = signRefreshToken(mentor._id.toString());
+
+      res.cookie("refresh_token", refreshToken, {
+        httpOnly: true,
+        secure: isProduction,
+        sameSite: isProduction ? "none" : "lax",
+        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+      });
+    }
+
+    const accessToken = signAccessToken(mentor._id.toString());
 
     res.cookie("access_token", accessToken, {
       httpOnly: true,
       secure: isProduction,
       sameSite: isProduction ? "none" : "lax",
       maxAge: 24 * 60 * 1000, // 15 minutes
-    });
-
-    res.cookie("refresh_token", refreshToken, {
-      httpOnly: true,
-      secure: isProduction,
-      sameSite: isProduction ? "none" : "lax",
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     });
 
     return res.status(200).json({
