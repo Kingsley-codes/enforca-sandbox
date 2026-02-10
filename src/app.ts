@@ -6,6 +6,7 @@ import cookieParser from "cookie-parser";
 import rateLimit from "express-rate-limit";
 import cors from "cors";
 import authRouter from "./routes/userAuthRoutes.js";
+import mentorDashboardRouter from "./routes/mentorDashboardRoutes.js";
 
 // Rate limiting configuration
 const limiter = rateLimit({
@@ -38,5 +39,6 @@ app.use(limiter);
 
 // Define API routes
 app.use("/api/auth", authRouter); // Register auth routes
+app.use("/api/mentor", mentorDashboardRouter); // Register mentor dashboard routes
 
 export default app;

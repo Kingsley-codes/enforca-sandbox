@@ -43,6 +43,22 @@ const userSchema = new Schema(
       enum: ["active", "suspended"],
       default: "active",
     },
+    totalAttendance: {
+      type: Number,
+      default: 0,
+    },
+    missed: {
+      type: Number,
+      default: 0,
+    },
+    aveGrade: {
+      type: Number,
+      default: 0,
+    },
+    progress: {
+      type: Number,
+      default: 0,
+    },
     course: {
       type: String,
       enum: [

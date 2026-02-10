@@ -16,15 +16,16 @@ export const userAuthenticate = async (
   req: Request,
   res: Response,
   next: NextFunction,
-) => {
+): Promise<void> => {
   try {
     let token = req.cookies.access_token;
 
     if (!token) {
-      return res.status(401).json({
+      res.status(401).json({
         status: "fail",
         message: "Not authorized, no token",
       });
+      return;
     }
 
     const decoded = jwt.verify(
@@ -33,9 +34,15 @@ export const userAuthenticate = async (
     ) as UserJwtPayload;
 
     const currentUser = await User.findById(decoded.id);
-    if (!currentUser) throw new Error("User not found");
+    if (!currentUser) {
+      res.status(401).json({
+        status: "fail",
+        message: "User not found",
+      });
+      return;
+    }
 
-    return (req.user = currentUser._id);
+    req.user = currentUser._id;
     next();
   } catch (err: any) {
     console.error("Protect error:", err);
@@ -46,7 +53,7 @@ export const userAuthenticate = async (
           ? "Session expired"
           : err.message;
 
-    return res.status(401).json({
+    res.status(401).json({
       status: "fail",
       message,
     });
@@ -57,15 +64,16 @@ export const mentorAuthenticate = async (
   req: Request,
   res: Response,
   next: NextFunction,
-) => {
+): Promise<void> => {
   try {
     let token = req.cookies.access_token;
 
     if (!token) {
-      return res.status(401).json({
+      res.status(401).json({
         status: "fail",
         message: "Not authorized, no token",
       });
+      return;
     }
 
     const decoded = jwt.verify(
@@ -74,9 +82,15 @@ export const mentorAuthenticate = async (
     ) as MentorJwtPayload;
 
     const currentUser = await Mentor.findById(decoded.id);
-    if (!currentUser) throw new Error("Mentor not found");
+    if (!currentUser) {
+      res.status(401).json({
+        status: "fail",
+        message: "Mentor not found",
+      });
+      return;
+    }
 
-    return (req.mentor = currentUser._id);
+    req.mentor = currentUser._id;
     next();
   } catch (err: any) {
     console.error("Protect error:", err);
@@ -87,7 +101,7 @@ export const mentorAuthenticate = async (
           ? "Session expired"
           : err.message;
 
-    return res.status(401).json({
+    res.status(401).json({
       status: "fail",
       message,
     });
