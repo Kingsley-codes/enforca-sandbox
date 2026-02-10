@@ -13,7 +13,7 @@ export const userAuthenticate = async (
   next: NextFunction,
 ) => {
   try {
-    let token = req.cookies.user_token;
+    let token = req.cookies.access_token;
 
     if (!token) {
       return res.status(401).json({

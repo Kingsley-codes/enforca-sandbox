@@ -1,7 +1,7 @@
 import { Schema, model, InferSchemaType, HydratedDocument } from "mongoose";
 import validator from "validator";
 
-const userSchema = new Schema(
+const mentorSchema = new Schema(
   {
     firstName: {
       type: String,
@@ -38,29 +38,6 @@ const userSchema = new Schema(
       publicId: { type: String },
       url: { type: String },
     },
-    status: {
-      type: String,
-      enum: ["active", "suspended"],
-      default: "active",
-    },
-    isVerified: {
-      type: Boolean,
-      default: false,
-    },
-    unusedCoins: {
-      type: Number,
-      default: 2500,
-    },
-    totalCoinsSpent: {
-      type: Number,
-      default: 0,
-    },
-    suspendReason: {
-      type: String,
-    },
-    address: {
-      type: String,
-    },
     gender: {
       type: String,
       enum: ["male", "female"],
@@ -69,12 +46,10 @@ const userSchema = new Schema(
   { timestamps: true },
 );
 
-userSchema.index({ status: 1, createdAt: -1 });
-userSchema.index({ isVerified: 1, createdAt: -1 });
+export type Mentor = InferSchemaType<typeof mentorSchema>;
 
-export type User = InferSchemaType<typeof userSchema>;
-export type UserDocument = HydratedDocument<User>;
+export type MentorDocument = HydratedDocument<Mentor>;
 
-const User = model("User", userSchema);
+const Mentor = model<Mentor>("Mentor", mentorSchema);
 
-export default User;
+export default Mentor;

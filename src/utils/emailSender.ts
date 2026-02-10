@@ -163,7 +163,7 @@ export const sendUserVerificationEmail = async (
     : "Verify To Your Meride Haven Account";
 
   const mailOptions: nodemailer.SendMailOptions = {
-    from: `"Meride Haven" <${process.env.GMAIL_USER}>`,
+    from: `"Meride Haven" <engineering@enforcatech.com>`,
     to: email,
     subject,
     html: `
