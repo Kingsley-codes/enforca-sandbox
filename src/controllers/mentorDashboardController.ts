@@ -3,7 +3,11 @@ import Mentor from "../models/mentorModel.js";
 import User from "../models/userModel.js";
 import Session from "../models/sessionModel.js";
 import Assignment from "../models/assignmentModel.js";
-import { buildDateFilter, DateFilter } from "../helpers/filter.js";
+import {
+  buildDateFilter,
+  buildSessionTimezoneMatch,
+  DateFilter,
+} from "../helpers/filter.js";
 
 export const fetchMentees = async (req: Request, res: Response) => {
   try {
@@ -135,15 +139,17 @@ export const fetchAllsessions = async (req: Request, res: Response) => {
       });
     }
 
-    const dateFilter = buildDateFilter(req.query.filter as DateFilter);
+    const dateFilter = buildSessionTimezoneMatch(
+      req.query.filter as DateFilter,
+    );
 
-    const query: any = { mentorId };
+    const pipeline: any[] = [{ $match: { mentorId } }];
 
     if (dateFilter) {
-      query.date = dateFilter;
+      pipeline.push({ $match: dateFilter });
     }
 
-    const sessions = await Session.find(query).sort({ date: 1 });
+    const sessions = await Session.find(pipeline);
 
     return res.status(200).json({
       status: "success",
@@ -171,10 +177,13 @@ export const getAllAssignments = async (req: Request, res: Response) => {
 
     const dateFilter = buildDateFilter(req.query.filter as DateFilter);
 
-    const query: any = { mentorId, status: "active" };
+    const query: any = {
+      mentor: mentorId,
+      status: "active",
+    };
 
     if (dateFilter) {
-      query.date = dateFilter;
+      query.dueDate = dateFilter;
     }
 
     const assignments = await Assignment.find(query).sort({

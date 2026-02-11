@@ -166,7 +166,7 @@ export const login = async (
 
       res.cookie("refresh_token", refreshToken, {
         httpOnly: true,
-        secure: isProduction,
+        secure: isProduction ? false : true,
         sameSite: isProduction ? "none" : "lax",
         path: "/api/auth/refresh", // very important
         maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
@@ -177,7 +177,7 @@ export const login = async (
 
     res.cookie("access_token", accessToken, {
       httpOnly: true,
-      secure: isProduction,
+      secure: isProduction ? false : true,
       sameSite: isProduction ? "none" : "lax",
       maxAge: 24 * 60 * 1000, // 15 minutes
     });
@@ -221,7 +221,7 @@ export const refreshToken = async (req: Request, res: Response) => {
     if (!decoded || decoded.type !== "refresh") {
       res.clearCookie("refresh_token", {
         httpOnly: true,
-        secure: isProduction,
+        secure: isProduction ? false : true,
         sameSite: isProduction ? "none" : "lax",
         path: "/api/auth/refresh",
       });
@@ -315,7 +315,7 @@ export const mentorLogin = async (
 
       res.cookie("refresh_token", refreshToken, {
         httpOnly: true,
-        secure: isProduction,
+        secure: isProduction ? false : true,
         sameSite: isProduction ? "none" : "lax",
         maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
       });
@@ -325,7 +325,7 @@ export const mentorLogin = async (
 
     res.cookie("access_token", accessToken, {
       httpOnly: true,
-      secure: isProduction,
+      secure: isProduction ? false : true,
       sameSite: isProduction ? "none" : "lax",
       maxAge: 3 * 24 * 60 * 60 * 1000, // 24 hours
     });
@@ -393,7 +393,7 @@ export const mentorRefreshToken = async (req: Request, res: Response) => {
 
     res.cookie("access_token", newAccessToken, {
       httpOnly: true,
-      secure: isProduction,
+      secure: isProduction ? false : true,
       sameSite: isProduction ? "none" : "lax",
       maxAge: 3 * 24 * 60 * 60 * 1000, // 3 days
     });

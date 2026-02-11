@@ -1,6 +1,6 @@
 // src/utils/sessionDateFilter.ts
 
-export type DateFilter = "daily" | "weekly" | "monthly";
+export type DateFilter = "daily" | "weekly" | "monthly" | undefined;
 
 export const buildDateFilter = (filter?: DateFilter) => {
   if (!filter) return undefined;
@@ -40,11 +40,7 @@ export const buildDateFilter = (filter?: DateFilter) => {
   };
 };
 
-// src/utils/sessionTimezoneFilter.ts
-
-export type SessionDateFilter = "daily" | "weekly" | "monthly";
-
-export const buildSessionTimezoneMatch = (filter?: SessionDateFilter) => {
+export const buildSessionTimezoneMatch = (filter?: DateFilter) => {
   if (!filter) return null;
 
   if (filter === "daily") {
