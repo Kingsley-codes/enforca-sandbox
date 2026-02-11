@@ -5,9 +5,10 @@ import helmet from "helmet";
 import cookieParser from "cookie-parser";
 import rateLimit from "express-rate-limit";
 import cors from "cors";
+import { sanitize } from "./middleware/mongodbSantizer.js";
 import authRouter from "./routes/userAuthRoutes.js";
 import mentorDashboardRouter from "./routes/mentorDashboardRoutes.js";
-import { sanitize } from "./middleware/mongodbSantizer.js";
+import userAuthRouter from "./routes/userAuthRoutes.js";
 
 // Rate limiting configuration
 const limiter = rateLimit({
@@ -53,5 +54,6 @@ app.use((req, res, next) => {
 // Define API routes
 app.use("/api/auth", authRouter); // Register auth routes
 app.use("/api/mentor", mentorDashboardRouter); // Register mentor dashboard routes
+app.use("/api/users", userAuthRouter); // Register mentor dashboard routes
 
 export default app;

@@ -128,6 +128,149 @@ export const createSession = async (req: Request, res: Response) => {
   }
 };
 
+export const editSession = async (req: Request, res: Response) => {
+  try {
+    const mentor = req.mentor;
+    const sessionId = req.params.id;
+
+    if (!mentor) {
+      return res.status(400).json({
+        status: "error",
+        message: "Unauthorized. Mentor not authenticated",
+      });
+    }
+
+    const session = await Session.findOne({
+      _id: sessionId,
+      mentor: mentor,
+    });
+
+    if (!session) {
+      return res.status(404).json({
+        status: "error",
+        message: "Session not found or not accessible",
+      });
+    }
+
+    const {
+      title,
+      notes,
+      fileAttachments,
+      attendees,
+      date,
+      time,
+      objectives,
+      timezone,
+      meetingLink,
+    } = req.body;
+
+    if (title) session.title = title;
+    if (notes) session.notes = notes;
+    if (fileAttachments) session.fileAttachments = fileAttachments;
+    if (attendees) session.attendees = attendees;
+    if (date) session.date = new Date(date);
+    if (time) session.time = time;
+    if (objectives) session.objectives = objectives;
+    if (timezone) session.timezone = timezone;
+    if (meetingLink) session.meetingLink = meetingLink;
+
+    await session.save();
+
+    return res.status(200).json({
+      status: "success",
+      data: session,
+    });
+  } catch (error: any) {
+    console.log("Error editing session:", error);
+    return res.status(500).json({
+      status: "error",
+      message: error.message,
+    });
+  }
+};
+
+export const deleteSession = async (req: Request, res: Response) => {
+  try {
+    const mentorId = req.mentor;
+    const sessionId = req.params.id;
+
+    if (!mentorId) {
+      return res.status(400).json({
+        status: "error",
+        message: "Unauthorized. Mentor not authenticated",
+      });
+    }
+
+    const session = await Session.findOneAndDelete({
+      _id: sessionId,
+      mentor: mentorId,
+    });
+
+    if (!session) {
+      return res.status(404).json({
+        status: "error",
+        message: "Session not found or not accessible",
+      });
+    }
+
+    return res.status(200).json({
+      status: "success",
+      message: "Session deleted successfully",
+    });
+  } catch (error: any) {
+    console.log("Error deleting Session:", error);
+    return res.status(500).json({
+      status: "error",
+      message: error.message,
+    });
+  }
+};
+
+export const rescheduleSession = async (req: Request, res: Response) => {
+  try {
+    const mentor = req.mentor;
+    const sessionId = req.params.id;
+
+    if (!mentor) {
+      return res.status(400).json({
+        status: "error",
+        message: "Unauthorized. Mentor not authenticated",
+      });
+    }
+
+    const { date, time, timezone } = req.body;
+
+    const session = await Session.findOne({
+      _id: sessionId,
+      mentor: mentor,
+    });
+
+    if (!session) {
+      return res.status(404).json({
+        status: "error",
+        message: "Session not found or not accessible",
+      });
+    }
+
+    if (date) session.date = new Date(date);
+    if (time) session.time = time;
+    if (timezone) session.timezone = timezone;
+
+    await session.save();
+
+    return res.status(200).json({
+      status: "success",
+      message: "Session rescheduled successfully",
+    });
+  } catch (error: any) {
+    console.log("Error editing session:", error);
+    return res.status(500).json({
+      status: "error",
+      message: error.message,
+    });
+  }
+};
+
 export const fetchAllsessions = async (req: Request, res: Response) => {
   try {
     const mentorId = req.mentor;

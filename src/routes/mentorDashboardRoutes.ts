@@ -7,11 +7,14 @@ import {
   createAssignment,
   editAssignment,
   deleteAssignment,
+  fetchAllsessions,
 } from "../controllers/mentorDashboardController.js";
 
 const mentorDashboardRouter = express.Router();
 
 mentorDashboardRouter.get("/mentees", mentorAuthenticate, fetchMentees);
+
+mentorDashboardRouter.get("/sessions", mentorAuthenticate, fetchAllsessions);
 mentorDashboardRouter.post("/sessions", mentorAuthenticate, createSession);
 
 mentorDashboardRouter.get(
