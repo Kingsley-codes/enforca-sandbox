@@ -2,7 +2,7 @@ import { Schema, model, InferSchemaType, HydratedDocument } from "mongoose";
 
 const assignmentSchema = new Schema(
   {
-    mentorId: {
+    mentor: {
       type: Schema.Types.ObjectId,
       ref: "Mentor",
       required: true,

@@ -7,6 +7,7 @@ import rateLimit from "express-rate-limit";
 import cors from "cors";
 import authRouter from "./routes/userAuthRoutes.js";
 import mentorDashboardRouter from "./routes/mentorDashboardRoutes.js";
+import { sanitize } from "./middleware/mongodbSantizer.js";
 
 // Rate limiting configuration
 const limiter = rateLimit({
@@ -36,6 +37,18 @@ app.use(cookieParser());
 app.use(express.urlencoded({ extended: true }));
 app.use(helmet());
 app.use(limiter);
+app.use((req, res, next) => {
+  req.body = sanitize(req.body);
+  req.params = sanitize(req.params);
+
+  // Mutate req.query in-place without overwriting it
+  for (const key in req.query) {
+    if (key.startsWith("$") || key.includes(".")) {
+      delete req.query[key];
+    }
+  }
+  next();
+});
 
 // Define API routes
 app.use("/api/auth", authRouter); // Register auth routes

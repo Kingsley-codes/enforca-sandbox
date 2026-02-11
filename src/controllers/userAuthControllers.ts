@@ -327,7 +327,7 @@ export const mentorLogin = async (
       httpOnly: true,
       secure: isProduction,
       sameSite: isProduction ? "none" : "lax",
-      maxAge: 24 * 60 * 60 * 1000, // 24 hours
+      maxAge: 3 * 24 * 60 * 60 * 1000, // 24 hours
     });
 
     return res.status(200).json({
@@ -395,7 +395,7 @@ export const mentorRefreshToken = async (req: Request, res: Response) => {
       httpOnly: true,
       secure: isProduction,
       sameSite: isProduction ? "none" : "lax",
-      maxAge: 15 * 60 * 1000, // 15 minutes
+      maxAge: 3 * 24 * 60 * 60 * 1000, // 3 days
     });
 
     return res.status(200).json({
@@ -414,9 +414,9 @@ export const mentorRefreshToken = async (req: Request, res: Response) => {
 
 export const changeMentorPassword = async (req: Request, res: Response) => {
   try {
-    const { email, currentPassword, newPassword } = req.body;
+    const { email, newPassword } = req.body;
 
-    if (!email || !currentPassword || !newPassword) {
+    if (!email || !newPassword) {
       return res.status(400).json({
         status: "fail",
         message: "Email, current password, and new password are required",
@@ -432,17 +432,17 @@ export const changeMentorPassword = async (req: Request, res: Response) => {
       });
     }
 
-    const isCurrentPasswordValid = await bcrypt.compare(
-      currentPassword,
-      mentor.password,
-    );
+    // const isCurrentPasswordValid = await bcrypt.compare(
+    //   currentPassword,
+    //   mentor.password,
+    // );
 
-    if (!isCurrentPasswordValid) {
-      return res.status(401).json({
-        status: "fail",
-        message: "Current password is incorrect",
-      });
-    }
+    // if (!isCurrentPasswordValid) {
+    //   return res.status(401).json({
+    //     status: "fail",
+    //     message: "Current password is incorrect",
+    //   });
+    // }
 
     if (
       !validator.isStrongPassword(newPassword, {

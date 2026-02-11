@@ -134,7 +134,9 @@ export const getAllAssignments = async (req: Request, res: Response) => {
       });
     }
 
-    const assignments = await Assignment.find({ mentorId });
+    const assignments = await Assignment.find({ mentor: mentorId }).sort({
+      createdAt: -1,
+    });
 
     return res.status(200).json({
       status: "success",
@@ -143,6 +145,167 @@ export const getAllAssignments = async (req: Request, res: Response) => {
       },
     });
   } catch (error: any) {
+    console.log("Error fetching assignments:", error);
+    return res.status(500).json({
+      status: "error",
+      message: error.message,
+    });
+  }
+};
+ 
+export const createAssignment = async (req: Request, res: Response) => {
+  try {
+    const mentorId = req.mentor;
+    if (!mentorId) {
+      return res.status(400).json({
+        status: "error",
+        message: "Unauthorized. Mentor not authenticated",
+      });
+    }
+
+    const {
+      title,
+      description,
+      resources,
+      mentees,
+      dueDate,
+      week,
+      category,
+      dueTime,
+    } = req.body;
+
+    if (!title || !description || !dueDate || !category || !dueTime) {
+      return res.status(400).json({
+        status: "error",
+        message: "Missing required fields",
+      });
+    }
+
+    const mentorCourse = await Mentor.findById(mentorId).select("course");
+
+    const allMentees = await User.find({ course: mentorCourse?.course }).select(
+      "_id",
+    );
+
+    const menteeIds = allMentees.map((mentee) => mentee._id);
+
+    const assignment = await Assignment.create({
+      mentor: mentorId,
+      title,
+      description,
+      resources,
+      mentees: mentees && mentees.length > 0 ? mentees : menteeIds,
+      dueDate: new Date(dueDate),
+      week,
+      category,
+      course: mentorCourse?.course,
+      dueTime,
+    });
+
+    return res.status(201).json({
+      status: "success",
+      data: assignment,
+    });
+  } catch (error: any) {
+    console.log("Error creating assignment:", error);
+    return res.status(500).json({
+      status: "error",
+      message: error.message,
+    });
+  }
+};
+
+export const editAssignment = async (req: Request, res: Response) => {
+  try {
+    const mentorId = req.mentor;
+    const assignmentId = req.params.id;
+
+    if (!mentorId) {
+      return res.status(400).json({
+        status: "error",
+        message: "Unauthorized. Mentor not authenticated",
+      });
+    }
+
+    const assignment = await Assignment.findOne({
+      _id: assignmentId,
+      mentor: mentorId,
+    });
+
+    if (!assignment) {
+      return res.status(404).json({
+        status: "error",
+        message: "Assignment not found or not accessible",
+      });
+    }
+
+    const {
+      title,
+      description,
+      resources,
+      mentees,
+      dueDate,
+      week,
+      category,
+      dueTime,
+      status,
+    } = req.body;
+
+    if (title) assignment.title = title;
+    if (description) assignment.description = description;
+    if (resources) assignment.resources = resources;
+    if (mentees) assignment.mentees = mentees;
+    if (dueDate) assignment.dueDate = new Date(dueDate);
+    if (week) assignment.week = week;
+    if (category) assignment.category = category;
+    if (dueTime) assignment.dueTime = dueTime;
+    if (status) assignment.status = status;
+
+    await assignment.save();
+
+    return res.status(200).json({
+      status: "success",
+      data: assignment,
+    });
+  } catch (error: any) {
+    console.log("Error editing assignment:", error);
+    return res.status(500).json({
+      status: "error",
+      message: error.message,
+    });
+  }
+};
+
+export const deleteAssignment = async (req: Request, res: Response) => {
+  try {
+    const mentorId = req.mentor;
+    const assignmentId = req.params.id;
+
+    if (!mentorId) {
+      return res.status(400).json({
+        status: "error",
+        message: "Unauthorized. Mentor not authenticated",
+      });
+    }
+
+    const assignment = await Assignment.findOneAndDelete({
+      _id: assignmentId,
+      mentor: mentorId,
+    });
+
+    if (!assignment) {
+      return res.status(404).json({
+        status: "error",
+        message: "Assignment not found or not accessible",
+      });
+    }
+
+    return res.status(200).json({
+      status: "success",
+      message: "Assignment deleted successfully",
+    });
+  } catch (error: any) {
+    console.log("Error deleting assignment:", error);
     return res.status(500).json({
       status: "error",
       message: error.message,
