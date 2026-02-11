@@ -3,6 +3,7 @@ import Mentor from "../models/mentorModel.js";
 import User from "../models/userModel.js";
 import Session from "../models/sessionModel.js";
 import Assignment from "../models/assignmentModel.js";
+import { buildDateFilter, DateFilter } from "../helpers/filter.js";
 
 export const fetchMentees = async (req: Request, res: Response) => {
   try {
@@ -123,6 +124,40 @@ export const createSession = async (req: Request, res: Response) => {
   }
 };
 
+export const fetchAllsessions = async (req: Request, res: Response) => {
+  try {
+    const mentorId = req.mentor;
+
+    if (!mentorId) {
+      return res.status(400).json({
+        status: "error",
+        message: "Unauthorized. Mentor not authenticated",
+      });
+    }
+
+    const dateFilter = buildDateFilter(req.query.filter as DateFilter);
+
+    const query: any = { mentorId };
+
+    if (dateFilter) {
+      query.date = dateFilter;
+    }
+
+    const sessions = await Session.find(query).sort({ date: 1 });
+
+    return res.status(200).json({
+      status: "success",
+      data: { sessions },
+    });
+  } catch (error: any) {
+    console.log("Error fetching sessions:", error);
+    return res.status(500).json({
+      status: "error",
+      message: error.message,
+    });
+  }
+};
+
 export const getAllAssignments = async (req: Request, res: Response) => {
   try {
     const mentorId = req.mentor;
@@ -134,8 +169,16 @@ export const getAllAssignments = async (req: Request, res: Response) => {
       });
     }
 
-    const assignments = await Assignment.find({ mentor: mentorId }).sort({
-      createdAt: -1,
+    const dateFilter = buildDateFilter(req.query.filter as DateFilter);
+
+    const query: any = { mentorId, status: "active" };
+
+    if (dateFilter) {
+      query.date = dateFilter;
+    }
+
+    const assignments = await Assignment.find(query).sort({
+      dueDate: -1,
     });
 
     return res.status(200).json({
@@ -152,7 +195,7 @@ export const getAllAssignments = async (req: Request, res: Response) => {
     });
   }
 };
- 
+
 export const createAssignment = async (req: Request, res: Response) => {
   try {
     const mentorId = req.mentor;
