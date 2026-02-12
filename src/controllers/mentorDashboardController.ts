@@ -413,8 +413,14 @@ export const createAssignment = async (req: Request, res: Response) => {
 
     if (resourceLinks) {
       try {
-        // because multipart/form-data sends arrays as strings
-        linkResources = JSON.parse(resourceLinks);
+        // If it already came as an array (browser case)
+    if (Array.isArray(resourceLinks)) {
+      linkResources = resourceLinks;
+    }
+    // If it came as a string (multipart/form-data case)
+    else if (typeof resourceLinks === "string") {
+      linkResources = JSON.parse(resourceLinks);
+    }
       } catch {
         return res.status(400).json({
           status: "error",
@@ -576,16 +582,25 @@ export const editAssignment = async (req: Request, res: Response) => {
 
     // 3. Parse resourceLinks
     let linkResources: { filename: string; url: string }[] = [];
-    if (resourceLinks) {
-      try {
-        linkResources = JSON.parse(resourceLinks);
-      } catch {
-        return res.status(400).json({
-          status: "error",
-          message: "Invalid resourceLinks format",
-        });
-      }
+
+if (resourceLinks) {
+  try {
+    // If it already came as an array (browser case)
+    if (Array.isArray(resourceLinks)) {
+      linkResources = resourceLinks;
     }
+    // If it came as a string (multipart/form-data case)
+    else if (typeof resourceLinks === "string") {
+      linkResources = JSON.parse(resourceLinks);
+    }
+  } catch {
+    return res.status(400).json({
+      status: "error",
+      message: "Invalid resourceLinks format",
+    });
+  }
+}
+
 
     // 4. Resolve mentor course
     const mentorCourse = await Mentor.findById(mentorId).select("course");
