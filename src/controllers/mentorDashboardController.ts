@@ -401,6 +401,7 @@ export const createAssignment = async (req: Request, res: Response) => {
         return {
           filename: file.originalname,
           url: result.secure_url,
+          publicId: result.public_id,
         };
       });
 
@@ -491,150 +492,162 @@ export const createAssignment = async (req: Request, res: Response) => {
   }
 };
 
-// export const editAssignment = async (req: Request, res: Response) => {
-//   try {
-//     const mentorId = req.mentor;
-//     const assignmentId = req.params.id;
+export const editAssignment = async (req: Request, res: Response) => {
+  try {
+    const mentorId = req.mentor;
+    const assignmentId = req.params.id;
 
-//     if (!mentorId) {
-//       return res.status(400).json({
-//         status: "error",
-//         message: "Unauthorized. Mentor not authenticated",
-//       });
-//     }
+    if (!mentorId) {
+      return res.status(400).json({
+        status: "error",
+        message: "Unauthorized. Mentor not authenticated",
+      });
+    }
 
-//     const assignment = await Assignment.findOne({
-//       _id: assignmentId,
-//       mentor: mentorId,
-//     });
+    const assignment = await Assignment.findOne({
+      _id: assignmentId,
+      mentor: mentorId,
+    });
 
-//     if (!assignment) {
-//       return res.status(404).json({
-//         status: "error",
-//         message: "Assignment not found or not accessible",
-//       });
-//     }
+    if (!assignment) {
+      return res.status(404).json({
+        status: "error",
+        message: "Assignment not found or not accessible",
+      });
+    }
 
-//     const {
-//       title,
-//       description,
-//       mentees,
-//       dueDate,
-//       week,
-//       category,
-//       resourceLinks,
-//       dueTime,
-//       status,
-//       deleteExistingResources, // new boolean flag
-//     } = req.body;
+    const {
+      title,
+      description,
+      mentees,
+      dueDate,
+      week,
+      category,
+      resourceLinks,
+      dueTime,
+      status,
+      deleteResources, // new boolean flag
+    } = req.body;
 
-//     // 1. Delete existing resources if requested
-//     if (deleteExistingResources && assignment.resources.length > 0) {
-//       const deletions = assignment.resources.map(async (resItem) => {
-//         if (resItem.url) {
-//           // Extract publicId from URL
-//           const parts = resItem.url.split("/");
-//           const filenameWithExt = parts[parts.length - 1]!; // e.g. abc123.jpg
-//           const publicId = `Enforca Sandbox/assignments/${filenameWithExt.split(".")[0]}`;
-//           return deleteFromCloudinary(publicId);
-//         }
-//       });
-//       await Promise.all(deletions);
-//       assignment.resources = []; // clear the array
-//     }
+    const rawDelete = deleteResources;
 
-//     // 2. Upload new resources (if any)
-//     const files = (req.files as { resources?: Express.Multer.File[] })
-//       ?.resources;
-//     let uploadedResources: { filename: string; url: string }[] = [];
+    const deleteExistingResources = rawDelete === true || rawDelete === "true";
 
-//     if (files && files.length > 0) {
-//       const uploads = files.map(async (file) => {
-//         const result = await uploadToCloudinary(
-//           file.buffer,
-//           "Enforca Sandbox/assignments",
-//         );
-//         return { filename: file.originalname, url: result.secure_url };
-//       });
-//       uploadedResources = await Promise.all(uploads);
-//     }
+    // 1. Delete existing resources if requested
+    if (deleteExistingResources && assignment.resources.length > 0) {
+      const deletions = assignment.resources.map(async (resItem) => {
+        if (!resItem.url) return;
 
-//     // 3. Parse resourceLinks
-//     let linkResources: { filename: string; url: string }[] = [];
-//     if (resourceLinks) {
-//       try {
-//         linkResources = JSON.parse(resourceLinks);
-//       } catch {
-//         return res.status(400).json({
-//           status: "error",
-//           message: "Invalid resourceLinks format",
-//         });
-//       }
-//     }
+        // Extract publicId from URL
+        const parts = resItem.url.split("/");
+        const filenameWithExt = parts[parts.length - 1]!; // e.g. abc123.jpg
+        const publicId = `Enforca Sandbox/assignments/${filenameWithExt.split(".")[0]}`;
 
-//     // 4. Resolve mentor course
-//     const mentorCourse = await Mentor.findById(mentorId).select("course");
-//     if (!mentorCourse?.course) {
-//       return res.status(400).json({
-//         status: "error",
-//         message: "Mentor course not found",
-//       });
-//     }
+        await deleteFromCloudinary(publicId);
+      });
 
-//     // 5. Parse mentees
-//     let finalMentees: string[] | Types.ObjectId[] = assignment.mentees;
-//     if (mentees) {
-//       try {
-//         if (Array.isArray(mentees)) {
-//           if (mentees.length === 1) {
-//             const maybe = JSON.parse(mentees[0]);
-//             finalMentees = Array.isArray(maybe) ? maybe : mentees;
-//           } else {
-//             finalMentees = mentees;
-//           }
-//         } else {
-//           const parsed = JSON.parse(mentees);
-//           finalMentees = Array.isArray(parsed) ? parsed : [parsed];
-//         }
-//       } catch {
-//         return res.status(400).json({
-//           status: "error",
-//           message: "Invalid mentees format",
-//         });
-//       }
-//     }
+      // const deletions = assignment.resources.map(async (resItem) => {
+      //   if (!resItem.publicId) return;
 
-//     // 6. Update assignment fields
-//     if (title) assignment.title = title;
-//     if (description) assignment.description = description;
-//     if (dueDate) assignment.dueDate = new Date(dueDate);
-//     if (dueTime) assignment.dueTime = dueTime;
-//     if (category) assignment.category = category;
-//     if (week && category === "task") assignment.week = week;
-//     if (status) assignment.status = status;
-//     assignment.mentees = finalMentees;
+      //   await deleteFromCloudinary(resItem.publicId);
+      // });
 
-//     // 7. Set new resources (replacing old ones if deleted)
-//     assignment.resources = [
-//       ...assignment.resources,
-//       ...uploadedResources,
-//       ...linkResources,
-//     ];
+      await Promise.all(deletions);
 
-//     await assignment.save();
+      // clear mongoose DocumentArray properly
+      assignment.resources.splice(0);
+    }
 
-//     return res.status(200).json({
-//       status: "success",
-//       data: assignment,
-//     });
-//   } catch (error: any) {
-//     console.log("Error editing assignment:", error);
-//     return res.status(500).json({
-//       status: "error",
-//       message: error.message,
-//     });
-//   }
-// };
+    // 2. Upload new resources (if any)
+    const files = (req.files as { resources?: Express.Multer.File[] })
+      ?.resources;
+    let uploadedResources: { filename: string; url: string }[] = [];
+
+    if (files && files.length > 0) {
+      const uploads = files.map(async (file) => {
+        const result = await uploadToCloudinary(
+          file.buffer,
+          "Enforca Sandbox/assignments",
+        );
+        return { filename: file.originalname, url: result.secure_url };
+      });
+      uploadedResources = await Promise.all(uploads);
+    }
+
+    // 3. Parse resourceLinks
+    let linkResources: { filename: string; url: string }[] = [];
+    if (resourceLinks) {
+      try {
+        linkResources = JSON.parse(resourceLinks);
+      } catch {
+        return res.status(400).json({
+          status: "error",
+          message: "Invalid resourceLinks format",
+        });
+      }
+    }
+
+    // 4. Resolve mentor course
+    const mentorCourse = await Mentor.findById(mentorId).select("course");
+    if (!mentorCourse?.course) {
+      return res.status(400).json({
+        status: "error",
+        message: "Mentor course not found",
+      });
+    }
+
+    // 5. Parse mentees
+    let finalMentees: string[] | Types.ObjectId[] = assignment.mentees;
+    if (mentees) {
+      try {
+        if (Array.isArray(mentees)) {
+          if (mentees.length === 1) {
+            const maybe = JSON.parse(mentees[0]);
+            finalMentees = Array.isArray(maybe) ? maybe : mentees;
+          } else {
+            finalMentees = mentees;
+          }
+        } else {
+          const parsed = JSON.parse(mentees);
+          finalMentees = Array.isArray(parsed) ? parsed : [parsed];
+        }
+      } catch {
+        return res.status(400).json({
+          status: "error",
+          message: "Invalid mentees format",
+        });
+      }
+    }
+
+    // 6. Update assignment fields
+    if (title) assignment.title = title;
+    if (description) assignment.description = description;
+    if (dueDate) assignment.dueDate = new Date(dueDate);
+    if (dueTime) assignment.dueTime = dueTime;
+    if (category) assignment.category = category;
+    if (week && category === "task") assignment.week = week;
+    if (status) assignment.status = status;
+    assignment.mentees = finalMentees.map((id) =>
+      typeof id === "string" ? new Types.ObjectId(id) : id,
+    );
+
+    // 7. Set new resources (replacing old ones if deleted)
+    assignment.resources.push(...uploadedResources, ...linkResources);
+
+    await assignment.save();
+
+    return res.status(200).json({
+      status: "success",
+      data: assignment,
+    });
+  } catch (error: any) {
+    console.log("Error editing assignment:", error);
+    return res.status(500).json({
+      status: "error",
+      message: error.message,
+    });
+  }
+};
 
 export const deleteAssignment = async (req: Request, res: Response) => {
   try {

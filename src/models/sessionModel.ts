@@ -1,5 +1,14 @@
 import { Schema, model, InferSchemaType, HydratedDocument } from "mongoose";
 
+const fileAttachmentsSchema = new Schema(
+  {
+    filename: { type: String },
+    url: { type: String },
+    publicId: { type: String },
+  },
+  { _id: false },
+);
+
 const sessionSchema = new Schema(
   {
     mentor: {
@@ -47,12 +56,7 @@ const sessionSchema = new Schema(
     notes: {
       type: String,
     },
-    fileAttachments: [
-      {
-        filename: String,
-        url: String,
-      },
-    ],
+    fileAttachments: [fileAttachmentsSchema],
   },
   {
     timestamps: true,

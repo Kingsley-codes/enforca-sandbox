@@ -16,6 +16,7 @@ interface CloudinaryUploadResult {
 }
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
+const MAX_RESOURCE_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 
 // ALLOWED MIME TYPES
 const allowedMimeTypes = ["image/jpeg", "image/png", "image/jpg", "image/webp"];
@@ -66,13 +67,13 @@ const resourceFileFilter = (
 const resourceStorage = multer.memoryStorage();
 export const uploadResource = multer({
   storage: resourceStorage,
-  limits: { fileSize: MAX_FILE_SIZE },
+  limits: { fileSize: MAX_RESOURCE_FILE_SIZE },
   fileFilter: resourceFileFilter,
 }).fields([{ name: "resources", maxCount: 5 }]);
 
 export const uploadFileattachments = multer({
   storage: resourceStorage,
-  limits: { fileSize: MAX_FILE_SIZE },
+  limits: { fileSize: MAX_RESOURCE_FILE_SIZE },
   fileFilter: resourceFileFilter,
 }).fields([{ name: "fileAttachments", maxCount: 5 }]);
 
@@ -93,7 +94,7 @@ export const handleUploadErrors = (
     if (err.code === "LIMIT_FILE_SIZE") {
       res
         .status(400)
-        .json({ error: "File too large. Maximum size is 5 MB per file." });
+        .json({ error: "File too large. Maximum size is 10 MB per file." });
       return;
     }
     res.status(400).json({ error: `Upload error: ${err.message}` });

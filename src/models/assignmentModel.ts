@@ -35,6 +35,8 @@ const assignmentSchema = new Schema(
       {
         filename: String,
         url: String,
+        publicId: String,
+        _id: false,
       },
     ],
     category: {
