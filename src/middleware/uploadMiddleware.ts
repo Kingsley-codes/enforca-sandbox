@@ -5,7 +5,7 @@ import express, { Request, Response, NextFunction } from "express";
 
 // Configure Cloudinary
 cloudinary.config({
-  cloud_name: process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME!,
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME!,
   api_key: process.env.CLOUDINARY_API_KEY!,
   api_secret: process.env.CLOUDINARY_API_SECRET!,
 });
@@ -38,35 +38,49 @@ const fileFilter = (
   }
 };
 
-const produceStorage = multer.memoryStorage();
-export const uploadProduceImages = multer({
-  storage: produceStorage,
-  limits: { fileSize: MAX_FILE_SIZE },
-  fileFilter,
-}).fields([
-  { name: "image1", maxCount: 1 },
-  { name: "image2", maxCount: 1 },
-  { name: "image3", maxCount: 1 },
-]);
+// ALLOWED MIME TYPES
+const resourceAllowedMimeTypes = [
+  "application/pdf",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+];
 
-export const uploadProducerImages = multer({
-  storage: produceStorage,
-  limits: { fileSize: MAX_FILE_SIZE },
-  fileFilter,
-}).fields([
-  { name: "profilePhoto", maxCount: 1 },
-  { name: "farmImage1", maxCount: 1 },
-  { name: "farmImage2", maxCount: 1 },
-  { name: "farmImage3", maxCount: 1 },
-  { name: "guarantorPhoto1", maxCount: 1 },
-  { name: "guarantorPhoto2", maxCount: 1 },
-]);
+// COMMON FILE FILTER
+const resourceFileFilter = (
+  req: Request,
+  file: Express.Multer.File,
+  cb: FileFilterCallback,
+): void => {
+  if (resourceAllowedMimeTypes.includes(file.mimetype)) {
+    cb(null, true);
+  } else {
+    cb(
+      new Error(
+        "Invalid file type. Only PDFs and Word documents are allowed.",
+      ) as any,
+      false,
+    );
+  }
+};
 
-export const uploadFiles = multer({
-  storage: produceStorage,
+const resourceStorage = multer.memoryStorage();
+export const uploadResource = multer({
+  storage: resourceStorage,
+  limits: { fileSize: MAX_FILE_SIZE },
+  fileFilter: resourceFileFilter,
+}).fields([{ name: "resources", maxCount: 5 }]);
+
+export const uploadFileattachments = multer({
+  storage: resourceStorage,
+  limits: { fileSize: MAX_FILE_SIZE },
+  fileFilter: resourceFileFilter,
+}).fields([{ name: "fileAttachments", maxCount: 5 }]);
+
+export const uploadProfilePhoto = multer({
+  storage: resourceStorage,
   limits: { fileSize: MAX_FILE_SIZE },
   fileFilter,
-}).fields([{ name: "files", maxCount: 5 }]);
+}).fields([{ name: "profilePhoto", maxCount: 1 }]);
 
 // 🚧 Middleware wrapper to catch Multer errors cleanly
 export const handleUploadErrors = (

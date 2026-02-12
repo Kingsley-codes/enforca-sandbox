@@ -8,6 +8,11 @@ import {
   buildSessionTimezoneMatch,
   DateFilter,
 } from "../helpers/filter.js";
+import {
+  deleteFromCloudinary,
+  uploadToCloudinary,
+} from "../middleware/uploadMiddleware.js";
+import { Types } from "mongoose";
 
 export const fetchMentees = async (req: Request, res: Response) => {
   try {
@@ -98,7 +103,7 @@ export const createSession = async (req: Request, res: Response) => {
     const menteeIds = mentees.map((mentee) => mentee._id);
 
     const session = await Session.create({
-      mentorId: mentor._id,
+      mentor,
       title,
       date: new Date(date),
       time,
@@ -263,7 +268,7 @@ export const rescheduleSession = async (req: Request, res: Response) => {
       message: "Session rescheduled successfully",
     });
   } catch (error: any) {
-    console.log("Error editing session:", error);
+    console.log("Error rescheduling session:", error);
     return res.status(500).json({
       status: "error",
       message: error.message,
@@ -273,9 +278,9 @@ export const rescheduleSession = async (req: Request, res: Response) => {
 
 export const fetchAllsessions = async (req: Request, res: Response) => {
   try {
-    const mentorId = req.mentor;
+    const mentor = req.mentor;
 
-    if (!mentorId) {
+    if (!mentor) {
       return res.status(400).json({
         status: "error",
         message: "Unauthorized. Mentor not authenticated",
@@ -286,7 +291,7 @@ export const fetchAllsessions = async (req: Request, res: Response) => {
       req.query.filter as DateFilter,
     );
 
-    const pipeline: any[] = [{ $match: { mentorId } }];
+    const pipeline: any[] = [{ $match: { mentor } }];
 
     if (dateFilter) {
       pipeline.push({ $match: dateFilter });
@@ -351,6 +356,7 @@ export const getAllAssignments = async (req: Request, res: Response) => {
 export const createAssignment = async (req: Request, res: Response) => {
   try {
     const mentorId = req.mentor;
+
     if (!mentorId) {
       return res.status(400).json({
         status: "error",
@@ -361,11 +367,11 @@ export const createAssignment = async (req: Request, res: Response) => {
     const {
       title,
       description,
-      resources,
       mentees,
       dueDate,
       week,
       category,
+      resourceLinks,
       dueTime,
     } = req.body;
 
@@ -376,24 +382,98 @@ export const createAssignment = async (req: Request, res: Response) => {
       });
     }
 
+    // 1. Upload resources (if any)
+    const files = (
+      req.files as {
+        resources?: Express.Multer.File[];
+      }
+    )?.resources;
+
+    let uploadedResources: { filename: string; url: string }[] = [];
+
+    if (files && files.length > 0) {
+      const uploads = files.map(async (file) => {
+        const result = await uploadToCloudinary(
+          file.buffer,
+          "Enforca Sandbox/assignments",
+        );
+
+        return {
+          filename: file.originalname,
+          url: result.secure_url,
+        };
+      });
+
+      uploadedResources = await Promise.all(uploads);
+    }
+
+    // links added from the "Add link" modal
+    let linkResources: { filename: string; url: string }[] = [];
+
+    if (resourceLinks) {
+      try {
+        // because multipart/form-data sends arrays as strings
+        linkResources = JSON.parse(resourceLinks);
+      } catch {
+        return res.status(400).json({
+          status: "error",
+          message: "Invalid resourceLinks format",
+        });
+      }
+    }
+
+    // 2. Resolve mentor course + mentees
     const mentorCourse = await Mentor.findById(mentorId).select("course");
 
-    const allMentees = await User.find({ course: mentorCourse?.course }).select(
-      "_id",
-    );
+    if (!mentorCourse?.course) {
+      return res.status(400).json({
+        status: "error",
+        message: "Mentor course not found",
+      });
+    }
 
-    const menteeIds = allMentees.map((mentee) => mentee._id);
+    let finalMentees: string[] | Types.ObjectId[];
 
+    if (mentees) {
+      try {
+        if (Array.isArray(mentees)) {
+          // could be ["id1","id2"] OR ['["id1","id2"]']
+          if (mentees.length === 1) {
+            const maybe = JSON.parse(mentees[0]);
+            finalMentees = Array.isArray(maybe) ? maybe : mentees;
+          } else {
+            finalMentees = mentees;
+          }
+        } else {
+          // string
+          const parsed = JSON.parse(mentees);
+          finalMentees = Array.isArray(parsed) ? parsed : [parsed];
+        }
+      } catch {
+        return res.status(400).json({
+          status: "error",
+          message: "Invalid mentees format",
+        });
+      }
+    } else {
+      const allMentees = await User.find({
+        course: mentorCourse.course,
+      }).select("_id");
+
+      finalMentees = allMentees.map((m) => m._id);
+    }
+
+    // 3. Create assignment
     const assignment = await Assignment.create({
       mentor: mentorId,
       title,
       description,
-      resources,
-      mentees: mentees && mentees.length > 0 ? mentees : menteeIds,
+      resources: [...uploadedResources, ...linkResources], // ✅ uploaded files
+      mentees: finalMentees,
       dueDate: new Date(dueDate),
-      week,
+      week: category === "task" ? week : undefined,
       category,
-      course: mentorCourse?.course,
+      course: mentorCourse.course,
       dueTime,
     });
 
@@ -403,6 +483,7 @@ export const createAssignment = async (req: Request, res: Response) => {
     });
   } catch (error: any) {
     console.log("Error creating assignment:", error);
+
     return res.status(500).json({
       status: "error",
       message: error.message,
@@ -410,66 +491,150 @@ export const createAssignment = async (req: Request, res: Response) => {
   }
 };
 
-export const editAssignment = async (req: Request, res: Response) => {
-  try {
-    const mentorId = req.mentor;
-    const assignmentId = req.params.id;
+// export const editAssignment = async (req: Request, res: Response) => {
+//   try {
+//     const mentorId = req.mentor;
+//     const assignmentId = req.params.id;
 
-    if (!mentorId) {
-      return res.status(400).json({
-        status: "error",
-        message: "Unauthorized. Mentor not authenticated",
-      });
-    }
+//     if (!mentorId) {
+//       return res.status(400).json({
+//         status: "error",
+//         message: "Unauthorized. Mentor not authenticated",
+//       });
+//     }
 
-    const assignment = await Assignment.findOne({
-      _id: assignmentId,
-      mentor: mentorId,
-    });
+//     const assignment = await Assignment.findOne({
+//       _id: assignmentId,
+//       mentor: mentorId,
+//     });
 
-    if (!assignment) {
-      return res.status(404).json({
-        status: "error",
-        message: "Assignment not found or not accessible",
-      });
-    }
+//     if (!assignment) {
+//       return res.status(404).json({
+//         status: "error",
+//         message: "Assignment not found or not accessible",
+//       });
+//     }
 
-    const {
-      title,
-      description,
-      resources,
-      mentees,
-      dueDate,
-      week,
-      category,
-      dueTime,
-      status,
-    } = req.body;
+//     const {
+//       title,
+//       description,
+//       mentees,
+//       dueDate,
+//       week,
+//       category,
+//       resourceLinks,
+//       dueTime,
+//       status,
+//       deleteExistingResources, // new boolean flag
+//     } = req.body;
 
-    if (title) assignment.title = title;
-    if (description) assignment.description = description;
-    if (resources) assignment.resources = resources;
-    if (mentees) assignment.mentees = mentees;
-    if (dueDate) assignment.dueDate = new Date(dueDate);
-    if (week) assignment.week = week;
-    if (category) assignment.category = category;
-    if (dueTime) assignment.dueTime = dueTime;
-    if (status) assignment.status = status;
+//     // 1. Delete existing resources if requested
+//     if (deleteExistingResources && assignment.resources.length > 0) {
+//       const deletions = assignment.resources.map(async (resItem) => {
+//         if (resItem.url) {
+//           // Extract publicId from URL
+//           const parts = resItem.url.split("/");
+//           const filenameWithExt = parts[parts.length - 1]!; // e.g. abc123.jpg
+//           const publicId = `Enforca Sandbox/assignments/${filenameWithExt.split(".")[0]}`;
+//           return deleteFromCloudinary(publicId);
+//         }
+//       });
+//       await Promise.all(deletions);
+//       assignment.resources = []; // clear the array
+//     }
 
-    await assignment.save();
+//     // 2. Upload new resources (if any)
+//     const files = (req.files as { resources?: Express.Multer.File[] })
+//       ?.resources;
+//     let uploadedResources: { filename: string; url: string }[] = [];
 
-    return res.status(200).json({
-      status: "success",
-      data: assignment,
-    });
-  } catch (error: any) {
-    console.log("Error editing assignment:", error);
-    return res.status(500).json({
-      status: "error",
-      message: error.message,
-    });
-  }
-};
+//     if (files && files.length > 0) {
+//       const uploads = files.map(async (file) => {
+//         const result = await uploadToCloudinary(
+//           file.buffer,
+//           "Enforca Sandbox/assignments",
+//         );
+//         return { filename: file.originalname, url: result.secure_url };
+//       });
+//       uploadedResources = await Promise.all(uploads);
+//     }
+
+//     // 3. Parse resourceLinks
+//     let linkResources: { filename: string; url: string }[] = [];
+//     if (resourceLinks) {
+//       try {
+//         linkResources = JSON.parse(resourceLinks);
+//       } catch {
+//         return res.status(400).json({
+//           status: "error",
+//           message: "Invalid resourceLinks format",
+//         });
+//       }
+//     }
+
+//     // 4. Resolve mentor course
+//     const mentorCourse = await Mentor.findById(mentorId).select("course");
+//     if (!mentorCourse?.course) {
+//       return res.status(400).json({
+//         status: "error",
+//         message: "Mentor course not found",
+//       });
+//     }
+
+//     // 5. Parse mentees
+//     let finalMentees: string[] | Types.ObjectId[] = assignment.mentees;
+//     if (mentees) {
+//       try {
+//         if (Array.isArray(mentees)) {
+//           if (mentees.length === 1) {
+//             const maybe = JSON.parse(mentees[0]);
+//             finalMentees = Array.isArray(maybe) ? maybe : mentees;
+//           } else {
+//             finalMentees = mentees;
+//           }
+//         } else {
+//           const parsed = JSON.parse(mentees);
+//           finalMentees = Array.isArray(parsed) ? parsed : [parsed];
+//         }
+//       } catch {
+//         return res.status(400).json({
+//           status: "error",
+//           message: "Invalid mentees format",
+//         });
+//       }
+//     }
+
+//     // 6. Update assignment fields
+//     if (title) assignment.title = title;
+//     if (description) assignment.description = description;
+//     if (dueDate) assignment.dueDate = new Date(dueDate);
+//     if (dueTime) assignment.dueTime = dueTime;
+//     if (category) assignment.category = category;
+//     if (week && category === "task") assignment.week = week;
+//     if (status) assignment.status = status;
+//     assignment.mentees = finalMentees;
+
+//     // 7. Set new resources (replacing old ones if deleted)
+//     assignment.resources = [
+//       ...assignment.resources,
+//       ...uploadedResources,
+//       ...linkResources,
+//     ];
+
+//     await assignment.save();
+
+//     return res.status(200).json({
+//       status: "success",
+//       data: assignment,
+//     });
+//   } catch (error: any) {
+//     console.log("Error editing assignment:", error);
+//     return res.status(500).json({
+//       status: "error",
+//       message: error.message,
+//     });
+//   }
+// };
 
 export const deleteAssignment = async (req: Request, res: Response) => {
   try {

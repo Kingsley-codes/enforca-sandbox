@@ -5,10 +5,11 @@ import {
   createSession,
   getAllAssignments,
   createAssignment,
-  editAssignment,
+  // editAssignment,
   deleteAssignment,
   fetchAllsessions,
 } from "../controllers/mentorDashboardController.js";
+import { uploadResource } from "../middleware/uploadMiddleware.js";
 
 const mentorDashboardRouter = express.Router();
 
@@ -26,14 +27,15 @@ mentorDashboardRouter.get(
 mentorDashboardRouter.post(
   "/assignments",
   mentorAuthenticate,
+  uploadResource,
   createAssignment,
 );
 
-mentorDashboardRouter.patch(
-  "/assignments/:id",
-  mentorAuthenticate,
-  editAssignment,
-);
+// mentorDashboardRouter.patch(
+//   "/assignments/:id",
+//   mentorAuthenticate,
+//   editAssignment,
+// );
 
 mentorDashboardRouter.delete(
   "/assignments/:id",
