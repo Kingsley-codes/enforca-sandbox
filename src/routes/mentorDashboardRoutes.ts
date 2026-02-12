@@ -8,9 +8,13 @@ import {
   editAssignment,
   deleteAssignment,
   fetchAllsessions,
+  editSession,
+  deleteSession,
+  rescheduleSession,
 } from "../controllers/mentorDashboardController.js";
 import {
   handleUploadErrors,
+  uploadFileattachments,
   uploadResource,
 } from "../middleware/uploadMiddleware.js";
 
@@ -19,7 +23,34 @@ const mentorDashboardRouter = express.Router();
 mentorDashboardRouter.get("/mentees", mentorAuthenticate, fetchMentees);
 
 mentorDashboardRouter.get("/sessions", mentorAuthenticate, fetchAllsessions);
-mentorDashboardRouter.post("/sessions", mentorAuthenticate, createSession);
+
+mentorDashboardRouter.post(
+  "/sessions",
+  mentorAuthenticate,
+  uploadFileattachments,
+  handleUploadErrors,
+  createSession,
+);
+
+mentorDashboardRouter.patch(
+  "/sessions/:id",
+  mentorAuthenticate,
+  uploadFileattachments,
+  handleUploadErrors,
+  editSession,
+);
+
+mentorDashboardRouter.patch(
+  "/sessions/:id/reschedule",
+  mentorAuthenticate,
+  rescheduleSession,
+);
+
+mentorDashboardRouter.delete(
+  "/sessions/:id",
+  mentorAuthenticate,
+  deleteSession,
+);
 
 mentorDashboardRouter.get(
   "/assignments",

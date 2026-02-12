@@ -54,7 +54,7 @@ const assignmentSchema = new Schema(
     },
     status: {
       type: String,
-      enum: ["active", "completed"],
+      enum: ["active", "overdue", "completed"],
       default: "active",
     },
   },

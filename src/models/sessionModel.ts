@@ -68,6 +68,6 @@ sessionSchema.index({ mentorId: 1, date: 1 });
 export type Session = InferSchemaType<typeof sessionSchema>;
 export type SessionDocument = HydratedDocument<Session>;
 
-const Session = model("Session", sessionSchema);
+const Session = model("Session", sessionSchema, "mentor_sessions");
 
 export default Session;

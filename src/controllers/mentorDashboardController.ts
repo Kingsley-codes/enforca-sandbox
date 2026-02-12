@@ -74,33 +74,133 @@ export const createSession = async (req: Request, res: Response) => {
       objectives,
       attendees,
       notes,
-      fileAttachments,
+      fileLinks,
     } = req.body;
 
     // Basic validation
-    if (
-      !title ||
-      !date ||
-      !time ||
-      !timezone ||
-      !meetingLink ||
-      !objectives ||
-      !Array.isArray(objectives) ||
-      objectives.length === 0
-    ) {
+    if (!title || !date || !time || !timezone || !meetingLink) {
       return res.status(400).json({
         status: "fail",
         message: "Missing or invalid required fields",
       });
     }
 
+    let finalObjectives: string[] = [];
+
+    if (objectives) {
+      try {
+        if (Array.isArray(objectives)) {
+          // could be ["text1", "text2"] OR ['["text1","text2"]']
+          if (objectives.length === 1 && typeof objectives[0] === "string") {
+            const maybe = JSON.parse(objectives[0]);
+            finalObjectives = Array.isArray(maybe)
+              ? maybe
+              : (objectives as string[]);
+          } else {
+            finalObjectives = objectives as string[];
+          }
+        } else if (typeof objectives === "string") {
+          const parsed = JSON.parse(objectives);
+          finalObjectives = Array.isArray(parsed) ? parsed : [parsed];
+        }
+      } catch {
+        return res.status(400).json({
+          status: "error",
+          message: "Invalid objectives format",
+        });
+      }
+    }
+
+    // 1. Upload resources (if any)
+    const files = (
+      req.files as {
+        fileAttachments?: Express.Multer.File[];
+      }
+    )?.fileAttachments;
+
+    let uploadedAttachments: {
+      filename: string;
+      publicId: string;
+      url: string;
+    }[] = [];
+
+    if (files && files.length > 0) {
+      const uploads = files.map(async (file) => {
+        const result = await uploadToCloudinary(
+          file.buffer,
+          "Enforca Sandbox/sessions",
+        );
+
+        return {
+          filename: file.originalname,
+          url: result.secure_url,
+          publicId: result.public_id,
+        };
+      });
+
+      uploadedAttachments = await Promise.all(uploads);
+    }
+
+    // links added from the "Add link" modal
+    let linkAttachments: { filename: string; url: string }[] = [];
+
+    if (fileLinks) {
+      try {
+        // If it already came as an array (browser case)
+        if (Array.isArray(fileLinks)) {
+          linkAttachments = fileLinks;
+        }
+        // If it came as a string (multipart/form-data case)
+        else if (typeof fileLinks === "string") {
+          linkAttachments = JSON.parse(fileLinks);
+        }
+      } catch {
+        return res.status(400).json({
+          status: "error",
+          message: "Invalid fileLinks format",
+        });
+      }
+    }
+
     const mentorCourse = await Mentor.findById(mentor).select("course");
 
-    const mentees = await User.find({ course: mentorCourse?.course }).select(
-      "_id",
-    );
+    if (!mentorCourse?.course) {
+      return res.status(400).json({
+        status: "error",
+        message: "Mentor course not found",
+      });
+    }
 
-    const menteeIds = mentees.map((mentee) => mentee._id);
+    let finalMentees: string[] | Types.ObjectId[];
+
+    if (attendees) {
+      try {
+        if (Array.isArray(attendees)) {
+          // could be ["id1","id2"] OR ['["id1","id2"]']
+          if (attendees.length === 1) {
+            const maybe = JSON.parse(attendees[0]);
+            finalMentees = Array.isArray(maybe) ? maybe : attendees;
+          } else {
+            finalMentees = attendees;
+          }
+        } else {
+          // string
+          const parsed = JSON.parse(attendees);
+          finalMentees = Array.isArray(parsed) ? parsed : [parsed];
+        }
+      } catch {
+        return res.status(400).json({
+          status: "error",
+          message: "Invalid mentees format",
+        });
+      }
+    } else {
+      const allMentees = await User.find({
+        course: mentorCourse.course,
+      }).select("_id");
+
+      finalMentees = allMentees.map((m) => m._id);
+    }
 
     const session = await Session.create({
       mentor,
@@ -110,10 +210,10 @@ export const createSession = async (req: Request, res: Response) => {
       timezone,
       course: mentorCourse?.course,
       meetingLink,
-      objectives,
-      attendees: attendees ? attendees : menteeIds,
+      objectives: finalObjectives,
+      attendees: finalMentees,
       notes,
-      fileAttachments,
+      fileAttachments: [...uploadedAttachments, ...linkAttachments],
     });
 
     return res.status(201).json({
@@ -139,7 +239,7 @@ export const editSession = async (req: Request, res: Response) => {
     const sessionId = req.params.id;
 
     if (!mentor) {
-      return res.status(400).json({
+      return res.status(401).json({
         status: "error",
         message: "Unauthorized. Mentor not authenticated",
       });
@@ -147,7 +247,7 @@ export const editSession = async (req: Request, res: Response) => {
 
     const session = await Session.findOne({
       _id: sessionId,
-      mentor: mentor,
+      mentor,
     });
 
     if (!session) {
@@ -159,25 +259,165 @@ export const editSession = async (req: Request, res: Response) => {
 
     const {
       title,
-      notes,
-      fileAttachments,
-      attendees,
       date,
       time,
-      objectives,
       timezone,
       meetingLink,
+      objectives,
+      attendees,
+      notes,
+      fileLinks,
+      deleteAttachments,
     } = req.body;
 
-    if (title) session.title = title;
-    if (notes) session.notes = notes;
-    if (fileAttachments) session.fileAttachments = fileAttachments;
-    if (attendees) session.attendees = attendees;
-    if (date) session.date = new Date(date);
-    if (time) session.time = time;
-    if (objectives) session.objectives = objectives;
-    if (timezone) session.timezone = timezone;
-    if (meetingLink) session.meetingLink = meetingLink;
+    const rawDelete = deleteAttachments;
+
+    const deleteExistingAttachments =
+      rawDelete === true || rawDelete === "true";
+
+    // 1. Delete existing resources if requested
+    if (deleteExistingAttachments && session.fileAttachments.length > 0) {
+      const deletions = session.fileAttachments.map(async (resItem) => {
+        if (!resItem.publicId) return;
+
+        await deleteFromCloudinary(resItem.publicId);
+      });
+
+      await Promise.all(deletions);
+
+      // clear mongoose DocumentArray properly
+      session.fileAttachments.splice(0);
+    }
+
+    // 2. Parse objectives (same as create)
+    let finalObjectives: string[] | undefined;
+
+    if (objectives !== undefined) {
+      try {
+        if (Array.isArray(objectives)) {
+          if (objectives.length === 1 && typeof objectives[0] === "string") {
+            const maybe = JSON.parse(objectives[0]);
+            finalObjectives = Array.isArray(maybe)
+              ? maybe
+              : (objectives as string[]);
+          } else {
+            finalObjectives = objectives as string[];
+          }
+        } else if (typeof objectives === "string") {
+          const parsed = JSON.parse(objectives);
+          finalObjectives = Array.isArray(parsed) ? parsed : [parsed];
+        }
+      } catch {
+        return res.status(400).json({
+          status: "error",
+          message: "Invalid objectives format",
+        });
+      }
+    }
+
+    // 3. Upload new resources (if any)
+    const files = (
+      req.files as {
+        fileAttachments?: Express.Multer.File[];
+      }
+    )?.fileAttachments;
+
+    let uploadedAttachments: {
+      filename: string;
+      url: string;
+      publicId: string;
+    }[] = [];
+
+    if (files && files.length > 0) {
+      const uploads = files.map(async (file) => {
+        const result = await uploadToCloudinary(
+          file.buffer,
+          "Enforca Sandbox/sessions",
+        );
+
+        return {
+          filename: file.originalname,
+          url: result.secure_url,
+          publicId: result.public_id,
+        };
+      });
+
+      uploadedAttachments = await Promise.all(uploads);
+    }
+
+    // 4. Parse resourceLinks
+    let linkAttachments: { filename: string; url: string }[] = [];
+
+    if (fileLinks !== undefined) {
+      try {
+        if (Array.isArray(fileLinks)) {
+          linkAttachments = fileLinks;
+        } else if (typeof fileLinks === "string") {
+          linkAttachments = JSON.parse(fileLinks);
+        }
+      } catch {
+        return res.status(400).json({
+          status: "error",
+          message: "Invalid fileLinks format",
+        });
+      }
+    }
+
+    // 5. Resolve mentor course + mentees
+    const mentorCourse = await Mentor.findById(mentor).select("course");
+
+    if (!mentorCourse?.course) {
+      return res.status(400).json({
+        status: "error",
+        message: "Mentor course not found",
+      });
+    }
+
+    // 6. Parse mentees
+    let finalMentees: string[] | Types.ObjectId[] | undefined;
+
+    if (attendees !== undefined) {
+      try {
+        if (Array.isArray(attendees)) {
+          if (attendees.length === 1) {
+            const maybe = JSON.parse(attendees[0]);
+            finalMentees = Array.isArray(maybe) ? maybe : attendees;
+          } else {
+            finalMentees = attendees;
+          }
+        } else {
+          const parsed = JSON.parse(attendees);
+          finalMentees = Array.isArray(parsed) ? parsed : [parsed];
+        }
+      } catch {
+        return res.status(400).json({
+          status: "error",
+          message: "Invalid mentees format",
+        });
+      }
+    } else {
+      const allMentees = await User.find({
+        course: mentorCourse.course,
+      }).select("_id");
+
+      finalMentees = allMentees.map((m) => m._id);
+    }
+
+    // 6. Update fields
+    if (title !== undefined) session.title = title;
+    if (notes !== undefined) session.notes = notes;
+    if (date !== undefined) session.date = new Date(date);
+    if (time !== undefined) session.time = time;
+    if (timezone !== undefined) session.timezone = timezone;
+    if (meetingLink !== undefined) session.meetingLink = meetingLink;
+
+    if (finalObjectives !== undefined) {
+      session.objectives = finalObjectives;
+    }
+
+    session.attendees = finalMentees.map((id) =>
+      typeof id === "string" ? new Types.ObjectId(id) : id,
+    );
 
     await session.save();
 
@@ -297,7 +537,7 @@ export const fetchAllsessions = async (req: Request, res: Response) => {
       pipeline.push({ $match: dateFilter });
     }
 
-    const sessions = await Session.find(pipeline);
+    const sessions = await Session.aggregate(pipeline);
 
     return res.status(200).json({
       status: "success",
@@ -389,7 +629,11 @@ export const createAssignment = async (req: Request, res: Response) => {
       }
     )?.resources;
 
-    let uploadedResources: { filename: string; url: string }[] = [];
+    let uploadedResources: {
+      filename: string;
+      publicId: string;
+      url: string;
+    }[] = [];
 
     if (files && files.length > 0) {
       const uploads = files.map(async (file) => {
@@ -414,13 +658,13 @@ export const createAssignment = async (req: Request, res: Response) => {
     if (resourceLinks) {
       try {
         // If it already came as an array (browser case)
-    if (Array.isArray(resourceLinks)) {
-      linkResources = resourceLinks;
-    }
-    // If it came as a string (multipart/form-data case)
-    else if (typeof resourceLinks === "string") {
-      linkResources = JSON.parse(resourceLinks);
-    }
+        if (Array.isArray(resourceLinks)) {
+          linkResources = resourceLinks;
+        }
+        // If it came as a string (multipart/form-data case)
+        else if (typeof resourceLinks === "string") {
+          linkResources = JSON.parse(resourceLinks);
+        }
       } catch {
         return res.status(400).json({
           status: "error",
@@ -542,21 +786,10 @@ export const editAssignment = async (req: Request, res: Response) => {
     // 1. Delete existing resources if requested
     if (deleteExistingResources && assignment.resources.length > 0) {
       const deletions = assignment.resources.map(async (resItem) => {
-        if (!resItem.url) return;
+        if (!resItem.publicId) return;
 
-        // Extract publicId from URL
-        const parts = resItem.url.split("/");
-        const filenameWithExt = parts[parts.length - 1]!; // e.g. abc123.jpg
-        const publicId = `Enforca Sandbox/assignments/${filenameWithExt.split(".")[0]}`;
-
-        await deleteFromCloudinary(publicId);
+        await deleteFromCloudinary(resItem.publicId);
       });
-
-      // const deletions = assignment.resources.map(async (resItem) => {
-      //   if (!resItem.publicId) return;
-
-      //   await deleteFromCloudinary(resItem.publicId);
-      // });
 
       await Promise.all(deletions);
 
@@ -567,7 +800,11 @@ export const editAssignment = async (req: Request, res: Response) => {
     // 2. Upload new resources (if any)
     const files = (req.files as { resources?: Express.Multer.File[] })
       ?.resources;
-    let uploadedResources: { filename: string; url: string }[] = [];
+    let uploadedResources: {
+      filename: string;
+      publicId: string;
+      url: string;
+    }[] = [];
 
     if (files && files.length > 0) {
       const uploads = files.map(async (file) => {
@@ -575,7 +812,11 @@ export const editAssignment = async (req: Request, res: Response) => {
           file.buffer,
           "Enforca Sandbox/assignments",
         );
-        return { filename: file.originalname, url: result.secure_url };
+        return {
+          filename: file.originalname,
+          url: result.secure_url,
+          publicId: result.public_id,
+        };
       });
       uploadedResources = await Promise.all(uploads);
     }
@@ -583,24 +824,23 @@ export const editAssignment = async (req: Request, res: Response) => {
     // 3. Parse resourceLinks
     let linkResources: { filename: string; url: string }[] = [];
 
-if (resourceLinks) {
-  try {
-    // If it already came as an array (browser case)
-    if (Array.isArray(resourceLinks)) {
-      linkResources = resourceLinks;
+    if (resourceLinks) {
+      try {
+        // If it already came as an array (browser case)
+        if (Array.isArray(resourceLinks)) {
+          linkResources = resourceLinks;
+        }
+        // If it came as a string (multipart/form-data case)
+        else if (typeof resourceLinks === "string") {
+          linkResources = JSON.parse(resourceLinks);
+        }
+      } catch {
+        return res.status(400).json({
+          status: "error",
+          message: "Invalid resourceLinks format",
+        });
+      }
     }
-    // If it came as a string (multipart/form-data case)
-    else if (typeof resourceLinks === "string") {
-      linkResources = JSON.parse(resourceLinks);
-    }
-  } catch {
-    return res.status(400).json({
-      status: "error",
-      message: "Invalid resourceLinks format",
-    });
-  }
-}
-
 
     // 4. Resolve mentor course
     const mentorCourse = await Mentor.findById(mentorId).select("course");
@@ -632,6 +872,12 @@ if (resourceLinks) {
           message: "Invalid mentees format",
         });
       }
+    } else {
+      const allMentees = await User.find({
+        course: mentorCourse.course,
+      }).select("_id");
+
+      finalMentees = allMentees.map((m) => m._id);
     }
 
     // 6. Update assignment fields
