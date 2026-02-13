@@ -2,6 +2,8 @@ import { Request, Response } from "express";
 import Session from "../models/sessionModel.js";
 import Assignment from "../models/assignmentModel.js";
 import { DateFilterType, getDateRange } from "../helpers/filter.js";
+import Submission from "../models/submissionModel.js";
+import { uploadToCloudinary } from "../middleware/uploadMiddleware.js";
 
 export const fetchMyAssignments = async (req: Request, res: Response) => {
   try {
@@ -148,12 +150,31 @@ export const makeSubmission = async (req: Request, res: Response) => {
 
     const { submittedLinks, assignmentId, submissionNotes } = req.body;
 
+    if (!assignmentId || !submissionNotes) {
+      return res.status(400).json({
+        status: "error",
+        message: "Missing required fields",
+      });
+    }
+
     const assignment = await Assignment.findById(assignmentId);
 
     if (!assignment) {
       return res.status(404).json({
         status: "error",
         message: "Assignment not found or not accessible",
+      });
+    }
+
+    const existingSubmission = await Submission.find({
+      assignment: assignmentId,
+      mentee: menteeId,
+    });
+
+    if (existingSubmission) {
+      return res.status(409).json({
+        status: "error",
+        message: "Assignment already submitted for this user",
       });
     }
 
@@ -177,5 +198,40 @@ export const makeSubmission = async (req: Request, res: Response) => {
         });
       }
     }
+
+    // 1. Upload submittedFiles (if any)
+    const files = (
+      req.files as {
+        submittedFiles?: Express.Multer.File[];
+      }
+    )?.submittedFiles;
+
+    let uploadedResources: {
+      filename: string;
+      publicId: string;
+      url: string;
+    }[] = [];
+
+    if (files && files.length > 0) {
+      const uploads = files.map(async (file) => {
+        const result = await uploadToCloudinary(
+          file.buffer,
+          "Enforca Sandbox/submissions",
+        );
+
+        return {
+          filename: file.originalname,
+          url: result.secure_url,
+          publicId: result.public_id,
+        };
+      });
+
+      uploadedResources = await Promise.all(uploads);
+    }
+
+    const newSubmission = await Submission.create({
+      assignment: assignmentId,
+      mentee: menteeId,
+    });
   } catch (error: any) {}
 };

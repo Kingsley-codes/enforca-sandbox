@@ -102,8 +102,12 @@ export const createSession = async (req: Request, res: Response) => {
             finalObjectives = objectives as string[];
           }
         } else if (typeof objectives === "string") {
-          const parsed = JSON.parse(objectives);
-          finalObjectives = Array.isArray(parsed) ? parsed : [parsed];
+          try {
+            const parsed = JSON.parse(objectives);
+            finalObjectives = Array.isArray(parsed) ? parsed : [parsed];
+          } catch {
+            finalObjectives = [objectives];
+          }
         }
       } catch {
         return res.status(400).json({
