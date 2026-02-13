@@ -605,7 +605,7 @@ export const getAllAssignments = async (req: Request, res: Response) => {
     const assignments = await Assignment.find({
       mentor: mentorId,
     })
-      .populate("attendees", "firstName lastName")
+      .populate("mentees", "firstName lastName")
       .sort({
         createdAt: -1,
       });
