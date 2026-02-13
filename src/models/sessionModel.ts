@@ -56,6 +56,13 @@ const sessionSchema = new Schema(
     notes: {
       type: String,
     },
+    fileLinks: [
+      {
+        filename: String,
+        url: String,
+        _id: false,
+      },
+    ],
     fileAttachments: [fileAttachmentsSchema],
   },
   {

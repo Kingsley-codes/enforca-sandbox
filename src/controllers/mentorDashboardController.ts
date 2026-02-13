@@ -3,18 +3,13 @@ import Mentor from "../models/mentorModel.js";
 import User from "../models/userModel.js";
 import Session from "../models/sessionModel.js";
 import Assignment from "../models/assignmentModel.js";
-import {
-  buildDateFilter,
-  buildSessionTimezoneMatch,
-  DateFilter,
-  DateFilterType,
-  getDateRange,
-} from "../helpers/filter.js";
+import { DateFilterType, getDateRange } from "../helpers/filter.js";
 import {
   deleteFromCloudinary,
   uploadToCloudinary,
 } from "../middleware/uploadMiddleware.js";
 import { Types } from "mongoose";
+import { parseFormArray } from "../helpers/parseFormArray.js";
 
 export const fetchMentees = async (req: Request, res: Response) => {
   try {
@@ -219,7 +214,8 @@ export const createSession = async (req: Request, res: Response) => {
       objectives: finalObjectives,
       attendees: finalMentees,
       notes,
-      fileAttachments: [...uploadedAttachments, ...linkAttachments],
+      fileAttachments: uploadedAttachments,
+      fileLinks: linkAttachments,
     });
 
     return res.status(201).json({
@@ -276,50 +272,34 @@ export const editSession = async (req: Request, res: Response) => {
       deleteAttachments,
     } = req.body;
 
-    const rawDelete = deleteAttachments;
-
-    const deleteExistingAttachments =
-      rawDelete === true || rawDelete === "true";
-
     // 1. Delete existing resources if requested
-    if (deleteExistingAttachments && session.fileAttachments.length > 0) {
-      const deletions = session.fileAttachments.map(async (resItem) => {
-        if (!resItem.publicId) return;
+    /* parse deleteAttachments */
+    const finalDeleteAttachments = parseFormArray<string>(deleteAttachments);
 
-        await deleteFromCloudinary(resItem.publicId);
-      });
+    if (finalDeleteAttachments?.length) {
+      const publicIdsToDelete = new Set(finalDeleteAttachments);
 
-      await Promise.all(deletions);
+      // delete from cloudinary
+      await Promise.all(
+        [...publicIdsToDelete].map((publicId) =>
+          deleteFromCloudinary(publicId),
+        ),
+      );
 
-      // clear mongoose DocumentArray properly
-      session.fileAttachments.splice(0);
+      // remove only matching attachments from mongoose DocumentArray
+      for (let i = session.fileAttachments.length - 1; i >= 0; i--) {
+        const att = session.fileAttachments.at(i);
+
+        if (!att) continue;
+
+        if (att.publicId && publicIdsToDelete.has(att.publicId)) {
+          session.fileAttachments.splice(i, 1);
+        }
+      }
     }
 
     // 2. Parse objectives (same as create)
-    let finalObjectives: string[] | undefined;
-
-    if (objectives !== undefined) {
-      try {
-        if (Array.isArray(objectives)) {
-          if (objectives.length === 1 && typeof objectives[0] === "string") {
-            const maybe = JSON.parse(objectives[0]);
-            finalObjectives = Array.isArray(maybe)
-              ? maybe
-              : (objectives as string[]);
-          } else {
-            finalObjectives = objectives as string[];
-          }
-        } else if (typeof objectives === "string") {
-          const parsed = JSON.parse(objectives);
-          finalObjectives = Array.isArray(parsed) ? parsed : [parsed];
-        }
-      } catch {
-        return res.status(400).json({
-          status: "error",
-          message: "Invalid objectives format",
-        });
-      }
-    }
+    const finalObjectives = parseFormArray<string>(objectives);
 
     // 3. Upload new resources (if any)
     const files = (
@@ -352,22 +332,9 @@ export const editSession = async (req: Request, res: Response) => {
     }
 
     // 4. Parse resourceLinks
-    let linkAttachments: { filename: string; url: string }[] = [];
-
-    if (fileLinks !== undefined) {
-      try {
-        if (Array.isArray(fileLinks)) {
-          linkAttachments = fileLinks;
-        } else if (typeof fileLinks === "string") {
-          linkAttachments = JSON.parse(fileLinks);
-        }
-      } catch {
-        return res.status(400).json({
-          status: "error",
-          message: "Invalid fileLinks format",
-        });
-      }
-    }
+    const linkAttachments = parseFormArray<{ filename: string; url: string }>(
+      fileLinks,
+    );
 
     // 5. Resolve mentor course + mentees
     const mentorCourse = await Mentor.findById(mentor).select("course");
@@ -383,24 +350,7 @@ export const editSession = async (req: Request, res: Response) => {
     let finalMentees: string[] | Types.ObjectId[] | undefined;
 
     if (attendees !== undefined) {
-      try {
-        if (Array.isArray(attendees)) {
-          if (attendees.length === 1) {
-            const maybe = JSON.parse(attendees[0]);
-            finalMentees = Array.isArray(maybe) ? maybe : attendees;
-          } else {
-            finalMentees = attendees;
-          }
-        } else {
-          const parsed = JSON.parse(attendees);
-          finalMentees = Array.isArray(parsed) ? parsed : [parsed];
-        }
-      } catch {
-        return res.status(400).json({
-          status: "error",
-          message: "Invalid mentees format",
-        });
-      }
+      finalMentees = parseFormArray<string>(attendees);
     } else {
       const allMentees = await User.find({
         course: mentorCourse.course,
@@ -421,9 +371,21 @@ export const editSession = async (req: Request, res: Response) => {
       session.objectives = finalObjectives;
     }
 
-    session.attendees = finalMentees.map((id) =>
-      typeof id === "string" ? new Types.ObjectId(id) : id,
-    );
+    if (fileLinks !== undefined && linkAttachments) {
+      session.fileLinks.splice(0, session.fileLinks.length); // clear existing DocumentArray
+
+      session.fileLinks.push(...linkAttachments); // push new items
+    }
+
+    if (uploadedAttachments.length > 0) {
+      session.fileAttachments.push(...uploadedAttachments);
+    }
+
+    if (finalMentees !== undefined) {
+      session.attendees = finalMentees.map((id) =>
+        typeof id === "string" ? new Types.ObjectId(id) : id,
+      );
+    }
 
     await session.save();
 
@@ -452,7 +414,7 @@ export const deleteSession = async (req: Request, res: Response) => {
       });
     }
 
-    const session = await Session.findOneAndDelete({
+    const session = await Session.findOne({
       _id: sessionId,
       mentor: mentorId,
     });
@@ -463,6 +425,15 @@ export const deleteSession = async (req: Request, res: Response) => {
         message: "Session not found or not accessible",
       });
     }
+
+    const deletions = session.fileAttachments.map((item) => {
+      if (!item.publicId) return Promise.resolve();
+      return deleteFromCloudinary(item.publicId);
+    });
+
+    await Promise.allSettled(deletions);
+
+    await session.deleteOne();
 
     return res.status(200).json({
       status: "success",
@@ -781,7 +752,8 @@ export const createAssignment = async (req: Request, res: Response) => {
       mentor: mentorId,
       title,
       description,
-      resources: [...uploadedResources, ...linkResources], // ✅ uploaded files
+      resourcesAttachments: uploadedResources, // ✅ uploaded files
+      resourcesLinks: linkResources,
       mentees: finalMentees,
       dueDate: new Date(dueDate),
       week: category === "task" ? week : undefined,
@@ -838,25 +810,32 @@ export const editAssignment = async (req: Request, res: Response) => {
       resourceLinks,
       dueTime,
       status,
-      deleteResources, // new boolean flag
+      deleteResources,
     } = req.body;
 
-    const rawDelete = deleteResources;
-
-    const deleteExistingResources = rawDelete === true || rawDelete === "true";
-
     // 1. Delete existing resources if requested
-    if (deleteExistingResources && assignment.resources.length > 0) {
-      const deletions = assignment.resources.map(async (resItem) => {
-        if (!resItem.publicId) return;
+    const finalDeleteResources = parseFormArray<string>(deleteResources);
 
-        await deleteFromCloudinary(resItem.publicId);
-      });
+    if (finalDeleteResources?.length) {
+      const publicIdsToDelete = new Set(finalDeleteResources);
 
-      await Promise.all(deletions);
+      // delete from cloudinary
+      await Promise.all(
+        [...publicIdsToDelete].map((publicId) =>
+          deleteFromCloudinary(publicId),
+        ),
+      );
 
-      // clear mongoose DocumentArray properly
-      assignment.resources.splice(0);
+      // remove only matching attachments from mongoose DocumentArray
+      for (let i = assignment.resourcesAttachments.length - 1; i >= 0; i--) {
+        const att = assignment.resourcesAttachments.at(i);
+
+        if (!att) continue;
+
+        if (att.publicId && publicIdsToDelete.has(att.publicId)) {
+          assignment.resourcesAttachments.splice(i, 1);
+        }
+      }
     }
 
     // 2. Upload new resources (if any)
@@ -884,25 +863,10 @@ export const editAssignment = async (req: Request, res: Response) => {
     }
 
     // 3. Parse resourceLinks
-    let linkResources: { filename: string; url: string }[] = [];
 
-    if (resourceLinks) {
-      try {
-        // If it already came as an array (browser case)
-        if (Array.isArray(resourceLinks)) {
-          linkResources = resourceLinks;
-        }
-        // If it came as a string (multipart/form-data case)
-        else if (typeof resourceLinks === "string") {
-          linkResources = JSON.parse(resourceLinks);
-        }
-      } catch {
-        return res.status(400).json({
-          status: "error",
-          message: "Invalid resourceLinks format",
-        });
-      }
-    }
+    const linkResources = parseFormArray<{ filename: string; url: string }>(
+      resourceLinks,
+    );
 
     // 4. Resolve mentor course
     const mentorCourse = await Mentor.findById(mentorId).select("course");
@@ -914,26 +878,10 @@ export const editAssignment = async (req: Request, res: Response) => {
     }
 
     // 5. Parse mentees
-    let finalMentees: string[] | Types.ObjectId[] = assignment.mentees;
-    if (mentees) {
-      try {
-        if (Array.isArray(mentees)) {
-          if (mentees.length === 1) {
-            const maybe = JSON.parse(mentees[0]);
-            finalMentees = Array.isArray(maybe) ? maybe : mentees;
-          } else {
-            finalMentees = mentees;
-          }
-        } else {
-          const parsed = JSON.parse(mentees);
-          finalMentees = Array.isArray(parsed) ? parsed : [parsed];
-        }
-      } catch {
-        return res.status(400).json({
-          status: "error",
-          message: "Invalid mentees format",
-        });
-      }
+    let finalMentees: string[] | Types.ObjectId[] | undefined;
+
+    if (mentees !== undefined) {
+      finalMentees = parseFormArray<string>(mentees);
     } else {
       const allMentees = await User.find({
         course: mentorCourse.course,
@@ -950,12 +898,22 @@ export const editAssignment = async (req: Request, res: Response) => {
     if (category) assignment.category = category;
     if (week && category === "task") assignment.week = week;
     if (status) assignment.status = status;
-    assignment.mentees = finalMentees.map((id) =>
-      typeof id === "string" ? new Types.ObjectId(id) : id,
-    );
 
-    // 7. Set new resources (replacing old ones if deleted)
-    assignment.resources.push(...uploadedResources, ...linkResources);
+    if (finalMentees !== undefined) {
+      assignment.mentees = finalMentees.map((id) =>
+        typeof id === "string" ? new Types.ObjectId(id) : id,
+      );
+    }
+
+    if (resourceLinks !== undefined && linkResources) {
+      assignment.resourcesLinks.splice(0, assignment.resourcesLinks.length); // clear existing DocumentArray
+
+      assignment.resourcesLinks.push(...linkResources); // push new items
+    }
+
+    if (uploadedResources.length > 0) {
+      assignment.resourcesAttachments.push(...uploadedResources);
+    }
 
     await assignment.save();
 
@@ -984,7 +942,7 @@ export const deleteAssignment = async (req: Request, res: Response) => {
       });
     }
 
-    const assignment = await Assignment.findOneAndDelete({
+    const assignment = await Assignment.findOne({
       _id: assignmentId,
       mentor: mentorId,
     });
@@ -995,6 +953,15 @@ export const deleteAssignment = async (req: Request, res: Response) => {
         message: "Assignment not found or not accessible",
       });
     }
+
+    const deletions = assignment.resourcesAttachments.map((item) => {
+      if (!item.publicId) return Promise.resolve();
+      return deleteFromCloudinary(item.publicId);
+    });
+
+    await Promise.allSettled(deletions);
+
+    await assignment.deleteOne();
 
     return res.status(200).json({
       status: "success",

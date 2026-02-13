@@ -31,7 +31,14 @@ const assignmentSchema = new Schema(
         ref: "User",
       },
     ],
-    resources: [
+    resourcesLinks: [
+      {
+        filename: String,
+        url: String,
+        _id: false,
+      },
+    ],
+    resourcesAttachments: [
       {
         filename: String,
         url: String,
