@@ -137,101 +137,101 @@ export const fetchMySessions = async (req: Request, res: Response) => {
   }
 };
 
-export const makeSubmission = async (req: Request, res: Response) => {
-  try {
-    const menteeId = req.user;
+// export const makeSubmission = async (req: Request, res: Response) => {
+//   try {
+//     const menteeId = req.user;
 
-    if (!menteeId) {
-      return res.status(400).json({
-        status: "error",
-        message: "Unauthorized. Mentee not authenticated",
-      });
-    }
+//     if (!menteeId) {
+//       return res.status(400).json({
+//         status: "error",
+//         message: "Unauthorized. Mentee not authenticated",
+//       });
+//     }
 
-    const { submittedLinks, assignmentId, submissionNotes } = req.body;
+//     const { submittedLinks, assignmentId, submissionNotes } = req.body;
 
-    if (!assignmentId || !submissionNotes) {
-      return res.status(400).json({
-        status: "error",
-        message: "Missing required fields",
-      });
-    }
+//     if (!assignmentId || !submissionNotes) {
+//       return res.status(400).json({
+//         status: "error",
+//         message: "Missing required fields",
+//       });
+//     }
 
-    const assignment = await Assignment.findById(assignmentId);
+//     const assignment = await Assignment.findById(assignmentId);
 
-    if (!assignment) {
-      return res.status(404).json({
-        status: "error",
-        message: "Assignment not found or not accessible",
-      });
-    }
+//     if (!assignment) {
+//       return res.status(404).json({
+//         status: "error",
+//         message: "Assignment not found or not accessible",
+//       });
+//     }
 
-    const existingSubmission = await Submission.find({
-      assignment: assignmentId,
-      mentee: menteeId,
-    });
+//     const existingSubmission = await Submission.find({
+//       assignment: assignmentId,
+//       mentee: menteeId,
+//     });
 
-    if (existingSubmission) {
-      return res.status(409).json({
-        status: "error",
-        message: "Assignment already submitted for this user",
-      });
-    }
+//     if (existingSubmission) {
+//       return res.status(409).json({
+//         status: "error",
+//         message: "Assignment already submitted for this user",
+//       });
+//     }
 
-    // links added from the "Add link" modal
-    let linkResources: { filename: string; url: string }[] = [];
+//     // links added from the "Add link" modal
+//     let linkResources: { filename: string; url: string }[] = [];
 
-    if (submittedLinks) {
-      try {
-        // If it already came as an array (browser case)
-        if (Array.isArray(submittedLinks)) {
-          linkResources = submittedLinks;
-        }
-        // If it came as a string (multipart/form-data case)
-        else if (typeof submittedLinks === "string") {
-          linkResources = JSON.parse(submittedLinks);
-        }
-      } catch {
-        return res.status(400).json({
-          status: "error",
-          message: "Invalid submittedLinks format",
-        });
-      }
-    }
+//     if (submittedLinks) {
+//       try {
+//         // If it already came as an array (browser case)
+//         if (Array.isArray(submittedLinks)) {
+//           linkResources = submittedLinks;
+//         }
+//         // If it came as a string (multipart/form-data case)
+//         else if (typeof submittedLinks === "string") {
+//           linkResources = JSON.parse(submittedLinks);
+//         }
+//       } catch {
+//         return res.status(400).json({
+//           status: "error",
+//           message: "Invalid submittedLinks format",
+//         });
+//       }
+//     }
 
-    // 1. Upload submittedFiles (if any)
-    const files = (
-      req.files as {
-        submittedFiles?: Express.Multer.File[];
-      }
-    )?.submittedFiles;
+//     // 1. Upload submittedFiles (if any)
+//     const files = (
+//       req.files as {
+//         submittedFiles?: Express.Multer.File[];
+//       }
+//     )?.submittedFiles;
 
-    let uploadedResources: {
-      filename: string;
-      publicId: string;
-      url: string;
-    }[] = [];
+//     let uploadedResources: {
+//       filename: string;
+//       publicId: string;
+//       url: string;
+//     }[] = [];
 
-    if (files && files.length > 0) {
-      const uploads = files.map(async (file) => {
-        const result = await uploadToCloudinary(
-          file.buffer,
-          "Enforca Sandbox/submissions",
-        );
+//     if (files && files.length > 0) {
+//       const uploads = files.map(async (file) => {
+//         const result = await uploadToCloudinary(
+//           file.buffer,
+//           "Enforca Sandbox/submissions",
+//         );
 
-        return {
-          filename: file.originalname,
-          url: result.secure_url,
-          publicId: result.public_id,
-        };
-      });
+//         return {
+//           filename: file.originalname,
+//           url: result.secure_url,
+//           publicId: result.public_id,
+//         };
+//       });
 
-      uploadedResources = await Promise.all(uploads);
-    }
+//       uploadedResources = await Promise.all(uploads);
+//     }
 
-    const newSubmission = await Submission.create({
-      assignment: assignmentId,
-      mentee: menteeId,
-    });
-  } catch (error: any) {}
-};
+//     const newSubmission = await Submission.create({
+//       assignment: assignmentId,
+//       mentee: menteeId,
+//     });
+//   } catch (error: any) {}
+// };
