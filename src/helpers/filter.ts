@@ -114,3 +114,49 @@ export const buildSessionTimezoneMatch = (filter?: DateFilter) => {
 
   return null;
 };
+
+// utils/dateFilters.ts
+export type DateFilterType = "day" | "week" | "month";
+
+export const getDateRange = (
+  type: DateFilterType,
+  referenceDate: Date = new Date(),
+  offset: number = 0,
+) => {
+  let start: Date;
+  let end: Date;
+  const ref = new Date(referenceDate);
+
+  switch (type) {
+    case "day":
+      ref.setDate(ref.getDate() + offset);
+      start = new Date(ref);
+      start.setHours(0, 0, 0, 0);
+      end = new Date(ref);
+      end.setHours(23, 59, 59, 999);
+      break;
+
+    case "week":
+      const dayOfWeek = ref.getDay(); // Sunday = 0
+      const mondayDiff = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+      ref.setDate(ref.getDate() + mondayDiff + offset * 7);
+      start = new Date(ref);
+      start.setHours(0, 0, 0, 0);
+      end = new Date(start);
+      end.setDate(end.getDate() + 6);
+      end.setHours(23, 59, 59, 999);
+      break;
+
+    case "month":
+      const month = ref.getMonth() + offset;
+      const year = ref.getFullYear();
+      start = new Date(year, month, 1, 0, 0, 0, 0);
+      end = new Date(year, month + 1, 0, 23, 59, 59, 999);
+      break;
+
+    default:
+      throw new Error("Invalid date filter type");
+  }
+
+  return { start, end };
+};

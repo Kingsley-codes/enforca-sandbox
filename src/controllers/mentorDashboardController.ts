@@ -7,6 +7,8 @@ import {
   buildDateFilter,
   buildSessionTimezoneMatch,
   DateFilter,
+  DateFilterType,
+  getDateRange,
 } from "../helpers/filter.js";
 import {
   deleteFromCloudinary,
@@ -527,21 +529,51 @@ export const fetchAllsessions = async (req: Request, res: Response) => {
       });
     }
 
-    const dateFilter = buildSessionTimezoneMatch(
-      req.query.filter as DateFilter,
-    );
+    const { filterType, referenceDate, offset } = req.query as {
+      filterType?: DateFilterType;
+      referenceDate?: string;
+      offset?: string;
+    };
 
-    const pipeline: any[] = [{ $match: { mentor } }];
+    let dateQuery = {};
+    let currentPeriodLabel = null;
 
-    if (dateFilter) {
-      pipeline.push({ $match: dateFilter });
+    if (filterType) {
+      const { start, end } = getDateRange(
+        filterType,
+        referenceDate ? new Date(referenceDate) : undefined,
+        offset ? parseInt(offset) : 0,
+      );
+
+      dateQuery = { dueDate: { $gte: start, $lte: end } };
+
+      // For frontend navigation labels
+      currentPeriodLabel =
+        filterType === "day"
+          ? start.toISOString().slice(0, 10) // YYYY-MM-DD
+          : filterType === "week"
+            ? `${start.toISOString().slice(0, 10)} to ${end
+                .toISOString()
+                .slice(0, 10)}`
+            : `${start.toLocaleString("default", {
+                month: "long",
+                year: "numeric",
+              })}`;
     }
 
-    const sessions = await Session.aggregate(pipeline);
+    const sessions = await Session.find({
+      mentor: mentor,
+      ...dateQuery,
+    })
+      .populate("attendees", "firstName lastName")
+      .sort({ createdAt: -1 });
 
     return res.status(200).json({
       status: "success",
-      data: { sessions },
+      data: {
+        sessions,
+        currentPeriod: currentPeriodLabel, // e.g., "2026-02-12" for daily
+      },
     });
   } catch (error: any) {
     console.log("Error fetching sessions:", error);
@@ -563,25 +595,51 @@ export const getAllAssignments = async (req: Request, res: Response) => {
       });
     }
 
-    const dateFilter = buildDateFilter(req.query.filter as DateFilter);
-
-    const query: any = {
-      mentor: mentorId,
-      status: "active",
+    const { filterType, referenceDate, offset } = req.query as {
+      filterType?: DateFilterType;
+      referenceDate?: string;
+      offset?: string;
     };
 
-    if (dateFilter) {
-      query.dueDate = dateFilter;
+    let dateQuery = {};
+    let currentPeriodLabel = null;
+
+    if (filterType) {
+      const { start, end } = getDateRange(
+        filterType,
+        referenceDate ? new Date(referenceDate) : undefined,
+        offset ? parseInt(offset) : 0,
+      );
+
+      dateQuery = { dueDate: { $gte: start, $lte: end } };
+
+      // For frontend navigation labels
+      currentPeriodLabel =
+        filterType === "day"
+          ? start.toISOString().slice(0, 10) // YYYY-MM-DD
+          : filterType === "week"
+            ? `${start.toISOString().slice(0, 10)} to ${end
+                .toISOString()
+                .slice(0, 10)}`
+            : `${start.toLocaleString("default", {
+                month: "long",
+                year: "numeric",
+              })}`;
     }
 
-    const assignments = await Assignment.find(query).sort({
-      dueDate: -1,
-    });
+    const assignments = await Assignment.find({
+      mentor: mentorId,
+    })
+      .populate("attendees", "firstName lastName")
+      .sort({
+        createdAt: -1,
+      });
 
     return res.status(200).json({
       status: "success",
       data: {
         assignments,
+        currentPeriod: currentPeriodLabel,
       },
     });
   } catch (error: any) {
