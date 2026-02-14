@@ -159,16 +159,16 @@ export const login = async (
 
     user.password = null;
 
-    const isDevelopment = process.env.NODE_ENV === "development";
+    const isSecure = req.secure || req.headers["x-forwarded-proto"] === "https";
 
     if (rememberMe) {
       const refreshToken = signRefreshToken(user._id.toString());
 
       res.cookie("refresh_token", refreshToken, {
         httpOnly: true,
-        secure: isDevelopment ? false : true,
-        sameSite: isDevelopment ? "none" : "lax",
-        path: "/api/auth/refresh", // very important
+        secure: isSecure,
+        sameSite: "lax",
+        path: "/api/auth/users/refresh-token", // very important
         maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
       });
     }
@@ -177,8 +177,8 @@ export const login = async (
 
     res.cookie("access_token", accessToken, {
       httpOnly: true,
-      secure: isDevelopment ? false : true,
-      sameSite: isDevelopment ? "none" : "lax",
+      secure: isSecure,
+      sameSite: "lax",
       maxAge: 3 * 24 * 60 * 60 * 1000, // 15 minutes
     });
 
@@ -206,7 +206,7 @@ export const refreshToken = async (req: Request, res: Response) => {
         message: "Refresh token missing",
       });
     }
-    const isDevelopment = process.env.NODE_ENV === "development";
+    const isSecure = req.secure || req.headers["x-forwarded-proto"] === "https";
 
     const refreshSecret = process.env.JWT_SECRET;
     if (!refreshSecret) {
@@ -221,8 +221,8 @@ export const refreshToken = async (req: Request, res: Response) => {
     if (!decoded || decoded.type !== "refresh") {
       res.clearCookie("refresh_token", {
         httpOnly: true,
-        secure: isDevelopment ? false : true,
-        sameSite: isDevelopment ? "none" : "lax",
+        secure: isSecure,
+        sameSite: "lax",
         path: "/api/auth/users/refresh-token",
       });
       return res.status(401).json({
@@ -243,8 +243,8 @@ export const refreshToken = async (req: Request, res: Response) => {
 
     res.cookie("access_token", newAccessToken, {
       httpOnly: true,
-      secure: isDevelopment,
-      sameSite: isDevelopment ? "none" : "lax",
+      secure: isSecure,
+      sameSite: "lax",
       maxAge: 3 * 24 * 60 * 60 * 1000, // 15 minutes
     });
 
@@ -374,15 +374,16 @@ export const mentorLogin = async (
 
     mentor.password = null;
 
-    const isDevelopment = process.env.NODE_ENV === "production";
+    // Detect if request is secure (HTTPS)
+    const isSecure = req.secure || req.headers["x-forwarded-proto"] === "https";
 
     if (rememberMe) {
       const refreshToken = signRefreshToken(mentor._id.toString());
 
       res.cookie("refresh_token", refreshToken, {
         httpOnly: true,
-        secure: isDevelopment ? false : true,
-        sameSite: isDevelopment ? "none" : "lax",
+        secure: isSecure,
+        sameSite: "lax",
         maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
       });
     }
@@ -391,8 +392,8 @@ export const mentorLogin = async (
 
     res.cookie("access_token", accessToken, {
       httpOnly: true,
-      secure: isDevelopment ? false : true,
-      sameSite: isDevelopment ? "none" : "lax",
+      secure: isSecure,
+      sameSite: "lax",
       maxAge: 3 * 24 * 60 * 60 * 1000, // 24 hours
     });
 
@@ -421,7 +422,7 @@ export const mentorRefreshToken = async (req: Request, res: Response) => {
       });
     }
 
-    const isDevelopment = process.env.NODE_ENV === "development";
+    const isSecure = req.secure || req.headers["x-forwarded-proto"] === "https";
 
     const refreshSecret = process.env.JWT_SECRET;
 
@@ -437,8 +438,8 @@ export const mentorRefreshToken = async (req: Request, res: Response) => {
     if (!decoded || decoded.type !== "refresh") {
       res.clearCookie("refresh_token", {
         httpOnly: true,
-        secure: isDevelopment,
-        sameSite: isDevelopment ? "none" : "lax",
+        secure: isSecure,
+        sameSite: "lax",
       });
 
       return res.status(401).json({
@@ -459,8 +460,8 @@ export const mentorRefreshToken = async (req: Request, res: Response) => {
 
     res.cookie("access_token", newAccessToken, {
       httpOnly: true,
-      secure: isDevelopment ? false : true,
-      sameSite: isDevelopment ? "none" : "lax",
+      secure: isSecure,
+      sameSite: "lax",
       maxAge: 3 * 24 * 60 * 60 * 1000, // 3 days
     });
 
