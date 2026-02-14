@@ -15,7 +15,7 @@ export const fetchMentees = async (req: Request, res: Response) => {
   try {
     const mentorId = req.mentor;
     if (!mentorId) {
-      return res.status(400).json({
+      return res.status(401).json({
         status: "error",
         message: "Unauthorized. Mentor not authenticated",
       });
@@ -348,7 +348,7 @@ export const deleteSession = async (req: Request, res: Response) => {
     const sessionId = req.params.id;
 
     if (!mentorId) {
-      return res.status(400).json({
+      return res.status(401).json({
         status: "error",
         message: "Unauthorized. Mentor not authenticated",
       });
@@ -394,7 +394,7 @@ export const rescheduleSession = async (req: Request, res: Response) => {
     const sessionId = req.params.id;
 
     if (!mentor) {
-      return res.status(400).json({
+      return res.status(401).json({
         status: "error",
         message: "Unauthorized. Mentor not authenticated",
       });
@@ -438,7 +438,7 @@ export const fetchAllsessions = async (req: Request, res: Response) => {
     const mentor = req.mentor;
 
     if (!mentor) {
-      return res.status(400).json({
+      return res.status(401).json({
         status: "error",
         message: "Unauthorized. Mentor not authenticated",
       });
@@ -506,7 +506,7 @@ export const getAllAssignments = async (req: Request, res: Response) => {
     const mentorId = req.mentor;
 
     if (!mentorId) {
-      return res.status(400).json({
+      return res.status(401).json({
         status: "error",
         message: "Unauthorized. Mentor not authenticated",
       });

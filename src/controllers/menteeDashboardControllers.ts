@@ -217,6 +217,7 @@ export const makeSubmission = async (req: Request, res: Response) => {
         const result = await uploadToCloudinary(
           file.buffer,
           "Enforca Sandbox/submissions",
+          file.originalname,
         );
 
         return {
