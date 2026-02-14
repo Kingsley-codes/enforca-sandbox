@@ -82,35 +82,8 @@ export const createSession = async (req: Request, res: Response) => {
       });
     }
 
-    let finalObjectives: string[] = [];
-
-    if (objectives) {
-      try {
-        if (Array.isArray(objectives)) {
-          // could be ["text1", "text2"] OR ['["text1","text2"]']
-          if (objectives.length === 1 && typeof objectives[0] === "string") {
-            const maybe = JSON.parse(objectives[0]);
-            finalObjectives = Array.isArray(maybe)
-              ? maybe
-              : (objectives as string[]);
-          } else {
-            finalObjectives = objectives as string[];
-          }
-        } else if (typeof objectives === "string") {
-          try {
-            const parsed = JSON.parse(objectives);
-            finalObjectives = Array.isArray(parsed) ? parsed : [parsed];
-          } catch {
-            finalObjectives = [objectives];
-          }
-        }
-      } catch {
-        return res.status(400).json({
-          status: "error",
-          message: "Invalid objectives format",
-        });
-      }
-    }
+    // Parse objectives
+    const finalObjectives = parseFormArray<string>(objectives);
 
     // 1. Upload resources (if any)
     const files = (
@@ -143,26 +116,10 @@ export const createSession = async (req: Request, res: Response) => {
       uploadedAttachments = await Promise.all(uploads);
     }
 
-    // links added from the "Add link" modal
-    let linkAttachments: { filename: string; url: string }[] = [];
-
-    if (fileLinks) {
-      try {
-        // If it already came as an array (browser case)
-        if (Array.isArray(fileLinks)) {
-          linkAttachments = fileLinks;
-        }
-        // If it came as a string (multipart/form-data case)
-        else if (typeof fileLinks === "string") {
-          linkAttachments = JSON.parse(fileLinks);
-        }
-      } catch {
-        return res.status(400).json({
-          status: "error",
-          message: "Invalid fileLinks format",
-        });
-      }
-    }
+    // Parse resourceLinks
+    const linkAttachments = parseFormArray<{ filename: string; url: string }>(
+      fileLinks,
+    );
 
     const mentorCourse = await Mentor.findById(mentor).select("course");
 
@@ -173,29 +130,10 @@ export const createSession = async (req: Request, res: Response) => {
       });
     }
 
-    let finalMentees: string[] | Types.ObjectId[];
+    let finalMentees: string[] | Types.ObjectId[] | undefined;
 
     if (attendees) {
-      try {
-        if (Array.isArray(attendees)) {
-          // could be ["id1","id2"] OR ['["id1","id2"]']
-          if (attendees.length === 1) {
-            const maybe = JSON.parse(attendees[0]);
-            finalMentees = Array.isArray(maybe) ? maybe : attendees;
-          } else {
-            finalMentees = attendees;
-          }
-        } else {
-          // string
-          const parsed = JSON.parse(attendees);
-          finalMentees = Array.isArray(parsed) ? parsed : [parsed];
-        }
-      } catch {
-        return res.status(400).json({
-          status: "error",
-          message: "Invalid mentees format",
-        });
-      }
+      finalMentees = parseFormArray<string>(attendees);
     } else {
       const allMentees = await User.find({
         course: mentorCourse.course,
@@ -505,6 +443,8 @@ export const fetchAllsessions = async (req: Request, res: Response) => {
         message: "Unauthorized. Mentor not authenticated",
       });
     }
+
+    console.log("mentor ID is,", mentor);
 
     const { filterType, referenceDate, offset } = req.query as {
       filterType?: DateFilterType;

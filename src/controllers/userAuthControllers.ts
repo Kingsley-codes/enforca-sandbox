@@ -159,15 +159,15 @@ export const login = async (
 
     user.password = null;
 
-    const isProduction = process.env.NODE_ENV === "production";
+    const isDevelopment = process.env.NODE_ENV === "development";
 
     if (rememberMe) {
       const refreshToken = signRefreshToken(user._id.toString());
 
       res.cookie("refresh_token", refreshToken, {
         httpOnly: true,
-        secure: isProduction ? false : true,
-        sameSite: isProduction ? "none" : "lax",
+        secure: isDevelopment ? false : true,
+        sameSite: isDevelopment ? "none" : "lax",
         path: "/api/auth/refresh", // very important
         maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
       });
@@ -177,9 +177,9 @@ export const login = async (
 
     res.cookie("access_token", accessToken, {
       httpOnly: true,
-      secure: isProduction ? false : true,
-      sameSite: isProduction ? "none" : "lax",
-      maxAge: 24 * 60 * 1000, // 15 minutes
+      secure: isDevelopment ? false : true,
+      sameSite: isDevelopment ? "none" : "lax",
+      maxAge: 3 * 24 * 60 * 60 * 1000, // 15 minutes
     });
 
     return res.status(200).json({
@@ -206,7 +206,7 @@ export const refreshToken = async (req: Request, res: Response) => {
         message: "Refresh token missing",
       });
     }
-    const isProduction = process.env.NODE_ENV === "production";
+    const isDevelopment = process.env.NODE_ENV === "development";
 
     const refreshSecret = process.env.JWT_SECRET;
     if (!refreshSecret) {
@@ -221,9 +221,9 @@ export const refreshToken = async (req: Request, res: Response) => {
     if (!decoded || decoded.type !== "refresh") {
       res.clearCookie("refresh_token", {
         httpOnly: true,
-        secure: isProduction ? false : true,
-        sameSite: isProduction ? "none" : "lax",
-        path: "/api/auth/refresh",
+        secure: isDevelopment ? false : true,
+        sameSite: isDevelopment ? "none" : "lax",
+        path: "/api/auth/users/refresh-token",
       });
       return res.status(401).json({
         status: "fail",
@@ -243,9 +243,9 @@ export const refreshToken = async (req: Request, res: Response) => {
 
     res.cookie("access_token", newAccessToken, {
       httpOnly: true,
-      secure: isProduction,
-      sameSite: isProduction ? "none" : "lax",
-      maxAge: 15 * 60 * 1000, // 15 minutes
+      secure: isDevelopment,
+      sameSite: isDevelopment ? "none" : "lax",
+      maxAge: 3 * 24 * 60 * 60 * 1000, // 15 minutes
     });
 
     return res.status(200).json({
@@ -258,6 +258,72 @@ export const refreshToken = async (req: Request, res: Response) => {
     return res.status(401).json({
       status: "error",
       message: "Failed to refresh access token",
+      details: err.message,
+    });
+  }
+};
+
+export const changeMenteePassword = async (req: Request, res: Response) => {
+  try {
+    const { email, newPassword } = req.body;
+
+    if (!email || !newPassword) {
+      return res.status(400).json({
+        status: "fail",
+        message: "Email, current password, and new password are required",
+      });
+    }
+
+    const user = await User.findOne({ email }).select("+password");
+
+    if (!user || !user.password) {
+      return res.status(404).json({
+        status: "fail",
+        message: "User not found",
+      });
+    }
+
+    // const isCurrentPasswordValid = await bcrypt.compare(
+    //   currentPassword,
+    //   mentor.password,
+    // );
+
+    // if (!isCurrentPasswordValid) {
+    //   return res.status(401).json({
+    //     status: "fail",
+    //     message: "Current password is incorrect",
+    //   });
+    // }
+
+    if (
+      !validator.isStrongPassword(newPassword, {
+        minLength: 8,
+        minUppercase: 1,
+        minSymbols: 1,
+        minNumbers: 1,
+      })
+    ) {
+      return res.status(400).json({
+        status: "fail",
+        message:
+          "New password must be at least 8 characters and include an uppercase letter, number, and symbol",
+      });
+    }
+
+    const hashedNewPassword = await bcrypt.hash(newPassword, 12);
+
+    user.password = hashedNewPassword;
+    await user.save();
+
+    return res.status(200).json({
+      status: "success",
+      message: "Password changed successfully",
+    });
+  } catch (err: any) {
+    console.error("Change user password error:", err);
+    return res.status(500).json({
+      status: "error",
+      message: "Failed to change password",
       details: err.message,
     });
   }
@@ -308,15 +374,15 @@ export const mentorLogin = async (
 
     mentor.password = null;
 
-    const isProduction = process.env.NODE_ENV === "production";
+    const isDevelopment = process.env.NODE_ENV === "production";
 
     if (rememberMe) {
       const refreshToken = signRefreshToken(mentor._id.toString());
 
       res.cookie("refresh_token", refreshToken, {
         httpOnly: true,
-        secure: isProduction ? false : true,
-        sameSite: isProduction ? "none" : "lax",
+        secure: isDevelopment ? false : true,
+        sameSite: isDevelopment ? "none" : "lax",
         maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
       });
     }
@@ -325,8 +391,8 @@ export const mentorLogin = async (
 
     res.cookie("access_token", accessToken, {
       httpOnly: true,
-      secure: isProduction ? false : true,
-      sameSite: isProduction ? "none" : "lax",
+      secure: isDevelopment ? false : true,
+      sameSite: isDevelopment ? "none" : "lax",
       maxAge: 3 * 24 * 60 * 60 * 1000, // 24 hours
     });
 
@@ -355,7 +421,7 @@ export const mentorRefreshToken = async (req: Request, res: Response) => {
       });
     }
 
-    const isProduction = process.env.NODE_ENV === "production";
+    const isDevelopment = process.env.NODE_ENV === "development";
 
     const refreshSecret = process.env.JWT_SECRET;
 
@@ -371,8 +437,8 @@ export const mentorRefreshToken = async (req: Request, res: Response) => {
     if (!decoded || decoded.type !== "refresh") {
       res.clearCookie("refresh_token", {
         httpOnly: true,
-        secure: isProduction,
-        sameSite: isProduction ? "none" : "lax",
+        secure: isDevelopment,
+        sameSite: isDevelopment ? "none" : "lax",
       });
 
       return res.status(401).json({
@@ -393,8 +459,8 @@ export const mentorRefreshToken = async (req: Request, res: Response) => {
 
     res.cookie("access_token", newAccessToken, {
       httpOnly: true,
-      secure: isProduction ? false : true,
-      sameSite: isProduction ? "none" : "lax",
+      secure: isDevelopment ? false : true,
+      sameSite: isDevelopment ? "none" : "lax",
       maxAge: 3 * 24 * 60 * 60 * 1000, // 3 days
     });
 
