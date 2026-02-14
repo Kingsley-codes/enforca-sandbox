@@ -130,6 +130,7 @@ export const createSession = async (req: Request, res: Response) => {
         const result = await uploadToCloudinary(
           file.buffer,
           "Enforca Sandbox/sessions",
+          file.originalname,
         );
 
         return {
@@ -319,6 +320,7 @@ export const editSession = async (req: Request, res: Response) => {
         const result = await uploadToCloudinary(
           file.buffer,
           "Enforca Sandbox/sessions",
+          file.originalname,
         );
 
         return {
@@ -673,6 +675,7 @@ export const createAssignment = async (req: Request, res: Response) => {
         const result = await uploadToCloudinary(
           file.buffer,
           "Enforca Sandbox/assignments",
+          file.originalname,
         );
 
         return {
@@ -852,6 +855,7 @@ export const editAssignment = async (req: Request, res: Response) => {
         const result = await uploadToCloudinary(
           file.buffer,
           "Enforca Sandbox/assignments",
+          file.originalname,
         );
         return {
           filename: file.originalname,

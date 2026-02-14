@@ -1,7 +1,8 @@
 import multer, { FileFilterCallback } from "multer";
 import { v2 as cloudinary } from "cloudinary";
 import streamifier from "streamifier";
-import express, { Request, Response, NextFunction } from "express";
+import { Request, Response, NextFunction } from "express";
+import path from "path";
 
 // Configure Cloudinary
 cloudinary.config({
@@ -110,12 +111,32 @@ export const handleUploadErrors = (
 export const uploadToCloudinary = (
   fileBuffer: Buffer,
   folder: string,
+  originalName: string,
 ): Promise<CloudinaryUploadResult> => {
   return new Promise((resolve, reject) => {
+    const { name, ext } = path.parse(originalName);
+    const uniqueName = `${name}-${Date.now()}${ext}`;
+
     const uploadStream = cloudinary.uploader.upload_stream(
-      { folder },
+      {
+        folder,
+        resource_type: "raw", // ✅ IMPORTANT
+        type: "upload",
+        access_mode: "public",
+
+        // 👇 this keeps the filename AND the extension
+        public_id: uniqueName,
+        overwrite: false,
+      },
       (error, result) => {
         if (error) return reject(error);
+
+        console.log("CLOUDINARY RESULT:", {
+          resource_type: result?.resource_type,
+          type: result?.type,
+          access_mode: result?.access_mode,
+          secure_url: result?.secure_url,
+        });
 
         if (!result) {
           return reject(new Error("Cloudinary upload failed: no result"));
