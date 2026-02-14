@@ -167,7 +167,7 @@ export const login = async (
       res.cookie("refresh_token", refreshToken, {
         httpOnly: true,
         secure: isSecure,
-        sameSite: "lax",
+        sameSite: "none",
         path: "/api/auth/users/refresh-token", // very important
         maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
       });
@@ -178,7 +178,7 @@ export const login = async (
     res.cookie("access_token", accessToken, {
       httpOnly: true,
       secure: isSecure,
-      sameSite: "lax",
+      sameSite: "none",
       maxAge: 3 * 24 * 60 * 60 * 1000, // 15 minutes
     });
 
@@ -222,7 +222,7 @@ export const refreshToken = async (req: Request, res: Response) => {
       res.clearCookie("refresh_token", {
         httpOnly: true,
         secure: isSecure,
-        sameSite: "lax",
+        sameSite: "none",
         path: "/api/auth/users/refresh-token",
       });
       return res.status(401).json({
@@ -383,7 +383,7 @@ export const mentorLogin = async (
       res.cookie("refresh_token", refreshToken, {
         httpOnly: true,
         secure: isSecure,
-        sameSite: "lax",
+        sameSite: "none",
         maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
       });
     }
@@ -393,7 +393,7 @@ export const mentorLogin = async (
     res.cookie("access_token", accessToken, {
       httpOnly: true,
       secure: isSecure,
-      sameSite: "lax",
+      sameSite: "none",
       maxAge: 3 * 24 * 60 * 60 * 1000, // 24 hours
     });
 
@@ -439,7 +439,7 @@ export const mentorRefreshToken = async (req: Request, res: Response) => {
       res.clearCookie("refresh_token", {
         httpOnly: true,
         secure: isSecure,
-        sameSite: "lax",
+        sameSite: "none",
       });
 
       return res.status(401).json({
@@ -461,7 +461,7 @@ export const mentorRefreshToken = async (req: Request, res: Response) => {
     res.cookie("access_token", newAccessToken, {
       httpOnly: true,
       secure: isSecure,
-      sameSite: "lax",
+      sameSite: "none",
       maxAge: 3 * 24 * 60 * 60 * 1000, // 3 days
     });
 
