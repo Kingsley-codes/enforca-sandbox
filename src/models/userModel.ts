@@ -20,6 +20,10 @@ const userSchema = new Schema(
       trim: true,
       lowercase: true,
     },
+    isPremium: {
+      type: Boolean,
+      default: false,
+    },
     phoneNumber: {
       type: String,
       sparse: true,

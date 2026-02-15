@@ -6,7 +6,7 @@ import validator from "validator";
 import {
   LoginRequestBody,
   RegisterRequestBody,
-} from "../interface/admin.interface.js";
+} from "../interface/allInterfaces.js";
 import Mentor from "../models/mentorModel.js";
 import { signAccessToken, signRefreshToken } from "../helpers/jwtHelper.js";
 
