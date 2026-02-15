@@ -29,6 +29,9 @@ const sessionSchema = new Schema(
       type: String,
       required: true,
     },
+    recordingLink: {
+      type: String,
+    },
     timezone: {
       type: String,
       required: true,

@@ -10,6 +10,7 @@ import {
 } from "../middleware/uploadMiddleware.js";
 import { Types } from "mongoose";
 import { parseFormArray } from "../helpers/parseFormArray.js";
+import Submission from "../models/submissionModel.js";
 
 export const fetchMentees = async (req: Request, res: Response) => {
   try {
@@ -124,7 +125,7 @@ export const createSession = async (req: Request, res: Response) => {
     const mentorCourse = await Mentor.findById(mentor).select("course");
 
     if (!mentorCourse?.course) {
-      return res.status(400).json({
+      return res.status(404).json({
         status: "error",
         message: "Mentor course not found",
       });
@@ -433,6 +434,53 @@ export const rescheduleSession = async (req: Request, res: Response) => {
   }
 };
 
+export const addRecordingLink = async (req: Request, res: Response) => {
+  try {
+    const mentor = req.mentor;
+    const sessionId = req.params.id;
+
+    if (!mentor) {
+      return res.status(401).json({
+        status: "error",
+        message: "Unauthorized. Mentor not authenticated",
+      });
+    }
+
+    const { recordingLink } = req.body;
+
+    if (!recordingLink) {
+      return res.status(400).json({
+        status: "error",
+        message: "RecordingLink is required",
+      });
+    }
+
+    const session = await Session.findOneAndUpdate(
+      { _id: sessionId, mentor },
+      { recordingLink },
+      { new: true },
+    );
+
+    if (!session) {
+      return res.status(404).json({
+        status: "error",
+        message: "Session not found or not accessible",
+      });
+    }
+
+    return res.status(200).json({
+      status: "success",
+      message: "Session recording link added successfully",
+    });
+  } catch (error: any) {
+    console.log("Error adding session recording link:", error);
+    return res.status(500).json({
+      status: "error",
+      message: error.message,
+    });
+  }
+};
+
 export const fetchAllsessions = async (req: Request, res: Response) => {
   try {
     const mentor = req.mentor;
@@ -443,8 +491,6 @@ export const fetchAllsessions = async (req: Request, res: Response) => {
         message: "Unauthorized. Mentor not authenticated",
       });
     }
-
-    console.log("mentor ID is,", mentor);
 
     const { filterType, referenceDate, offset } = req.query as {
       filterType?: DateFilterType;
@@ -913,6 +959,95 @@ export const deleteAssignment = async (req: Request, res: Response) => {
     });
   } catch (error: any) {
     console.log("Error deleting assignment:", error);
+    return res.status(500).json({
+      status: "error",
+      message: error.message,
+    });
+  }
+};
+
+export const getAllSubmissions = async (req: Request, res: Response) => {
+  try {
+    const mentorId = req.mentor;
+    if (!mentorId) {
+      return res.status(401).json({
+        status: "error",
+        message: "Unauthorized. Mentor not authenticated",
+      });
+    }
+
+    const submissions = await Submission.find({
+      mentor: mentorId,
+    })
+      .populate("assignment", "description week")
+      .populate("mentee", "firstName lastName email profilePhoto")
+      .sort({ createdAt: -1 });
+
+    if (!submissions) {
+      return res.status(400).json({
+        status: "error",
+        message: "No submissions found for this mentor",
+      });
+    }
+
+    return res.status(200).json({
+      status: "success",
+      data: submissions,
+    });
+  } catch (error: any) {
+    console.error("Fetch submissions error:", error);
+
+    return res.status(500).json({
+      status: "error",
+      message: "Failed to fetch submissions",
+      error: error.message,
+    });
+  }
+};
+
+export const gradeSubmission = async (req: Request, res: Response) => {
+  try {
+    const mentor = req.mentor;
+    if (!mentor) {
+      return res.status(401).json({
+        status: "error",
+        message: "Unauthorized. Mentor not authenticated",
+      });
+    }
+
+    const submissionId = req.params.id;
+
+    const { gradeScore, feedback } = req.body;
+
+    if (gradeScore == null || !feedback) {
+      return res.status(400).json({
+        status: "error",
+        message: "sessionId, gradeScore and feedback are required",
+      });
+    }
+
+    const submission = await Submission.findOneAndUpdate(
+      { _id: submissionId, mentor }, // 🔐 ownership check
+      {
+        grade: gradeScore,
+        mentorFeedback: feedback,
+        gradeDate: new Date(),
+      },
+      { new: true },
+    );
+    if (!submission) {
+      return res.status(404).json({
+        status: "error",
+        message: "Mentor course not found",
+      });
+    }
+
+    return res.status(200).json({
+      status: "success",
+      data: submission,
+    });
+  } catch (error: any) {
+    console.log("Error grading submission:", error);
     return res.status(500).json({
       status: "error",
       message: error.message,

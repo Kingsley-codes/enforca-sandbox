@@ -11,6 +11,9 @@ import {
   editSession,
   deleteSession,
   rescheduleSession,
+  addRecordingLink,
+  gradeSubmission,
+  getAllSubmissions,
 } from "../controllers/mentorDashboardController.js";
 import {
   handleUploadErrors,
@@ -46,6 +49,12 @@ mentorDashboardRouter.patch(
   rescheduleSession,
 );
 
+mentorDashboardRouter.patch(
+  "/sessions/:id/recording",
+  mentorAuthenticate,
+  addRecordingLink,
+);
+
 mentorDashboardRouter.delete(
   "/sessions/:id",
   mentorAuthenticate,
@@ -78,6 +87,18 @@ mentorDashboardRouter.delete(
   "/assignments/:id",
   mentorAuthenticate,
   deleteAssignment,
+);
+
+mentorDashboardRouter.get(
+  "/submissions",
+  mentorAuthenticate,
+  getAllSubmissions,
+);
+
+mentorDashboardRouter.patch(
+  "/submissions/:id",
+  mentorAuthenticate,
+  gradeSubmission,
 );
 
 export default mentorDashboardRouter;
