@@ -18,7 +18,10 @@ const coversationSchema = new Schema(
       trim: true,
     },
   },
-  { timestamps: true },
+  {
+    timestamps: true,
+    _id: false,
+  },
 );
 
 const discussionSchema = new Schema(

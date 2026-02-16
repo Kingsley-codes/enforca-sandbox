@@ -4,6 +4,9 @@ import Assignment from "../models/assignmentModel.js";
 import { DateFilterType, getDateRange } from "../helpers/filter.js";
 import Submission from "../models/submissionModel.js";
 import { uploadToCloudinary } from "../middleware/uploadMiddleware.js";
+import User from "../models/userModel.js";
+import { parseFormArray } from "../helpers/parseFormArray.js";
+import Discussion from "../models/discussionsModel.js";
 
 export const fetchMyAssignments = async (req: Request, res: Response) => {
   try {
@@ -49,6 +52,7 @@ export const fetchMyAssignments = async (req: Request, res: Response) => {
 
     const assignments = await Assignment.find({
       mentees: menteeId,
+      category: "task",
       ...dateQuery,
     })
       .select("-mentor -mentees")
@@ -70,12 +74,59 @@ export const fetchMyAssignments = async (req: Request, res: Response) => {
   }
 };
 
+export const fetchMyProjects = async (req: Request, res: Response) => {
+  try {
+    const menteeId = req.user;
+
+    if (!menteeId) {
+      return res.status(401).json({
+        status: "error",
+        message: "Unauthorized. Mentee not authenticated",
+      });
+    }
+
+    const mentee = await User.findById(menteeId);
+
+    if (!mentee) {
+      return res.status(404).json({
+        status: "error",
+        message: "Mentee not found",
+      });
+    }
+
+    if (!mentee.isPremium) {
+      return res.status(400).json({
+        status: "error",
+        message: "This feature is only available to premium users",
+      });
+    }
+
+    const projects = await Assignment.find({
+      mentees: menteeId,
+      category: "projects",
+    })
+      .select("-mentor -mentees")
+      .sort({ createdAt: -1 });
+
+    return res.status(200).json({
+      status: "success",
+      data: projects,
+    });
+  } catch (error: any) {
+    console.log("Error fetching mentee projects:", error);
+    return res.status(500).json({
+      status: "error",
+      message: error.message,
+    });
+  }
+};
+
 export const fetchMySessions = async (req: Request, res: Response) => {
   try {
     const menteeId = req.user;
 
     if (!menteeId) {
-      return res.status(400).json({
+      return res.status(401).json({
         status: "error",
         message: "Unauthorized. Mentee not authenticated",
       });
@@ -137,12 +188,152 @@ export const fetchMySessions = async (req: Request, res: Response) => {
   }
 };
 
+export const joinSession = async (req: Request, res: Response) => {
+  try {
+    const menteeId = req.user;
+    const { sessionId } = req.params;
+
+    if (!menteeId) {
+      return res.status(401).json({
+        status: "error",
+        message: "Unauthorized. Mentee not authenticated",
+      });
+    }
+
+    const mentee = await User.findById(menteeId);
+
+    if (!mentee) {
+      return res.status(404).json({
+        status: "error",
+        message: "Mentee not found",
+      });
+    }
+
+    if (mentee.unusedCoins < 500) {
+      return res.status(400).json({
+        status: "error",
+        message: "Not enough coins",
+      });
+    }
+
+    const session = await Session.findOne({
+      _id: sessionId,
+      attendees: menteeId,
+    });
+
+    if (!session) {
+      return res.status(404).json({
+        status: "error",
+        message: "Session not found",
+      });
+    }
+
+    const meetinLink = session.meetingLink;
+
+    if (!meetinLink) {
+      return res.status(404).json({
+        status: "error",
+        message: "Session meeting link not found",
+      });
+    }
+
+    mentee.unusedCoins -= 500;
+    mentee.totalCoinsSpent += 500;
+    await mentee.save();
+
+    return res.status(200).json({
+      status: "success",
+      data: {
+        meetinLink,
+        unusedcoins: mentee.unusedCoins,
+      },
+    });
+  } catch (error: any) {
+    console.log("Error fetching session meeting link:", error);
+
+    return res.status(500).json({
+      status: "error",
+      message: error.message,
+    });
+  }
+};
+
+export const getSessionRecording = async (req: Request, res: Response) => {
+  try {
+    const menteeId = req.user;
+    const { sessionId } = req.params;
+
+    if (!menteeId) {
+      return res.status(401).json({
+        status: "error",
+        message: "Unauthorized. Mentee not authenticated",
+      });
+    }
+
+    const mentee = await User.findById(menteeId);
+
+    if (!mentee) {
+      return res.status(404).json({
+        status: "error",
+        message: "Mentee not found",
+      });
+    }
+
+    if (mentee.unusedCoins < 500) {
+      return res.status(400).json({
+        status: "error",
+        message: "Not enough coins",
+      });
+    }
+
+    const session = await Session.findOne({
+      _id: sessionId,
+      attendees: menteeId,
+    });
+
+    if (!session) {
+      return res.status(404).json({
+        status: "error",
+        message: "Session not found",
+      });
+    }
+
+    const sessionRecording = session.recordingLink;
+
+    if (!sessionRecording) {
+      return res.status(404).json({
+        status: "error",
+        message: "Session does not have uploaded recording",
+      });
+    }
+
+    mentee.unusedCoins -= 500;
+    mentee.totalCoinsSpent += 500;
+    await mentee.save();
+
+    return res.status(200).json({
+      status: "success",
+      data: {
+        sessionRecording,
+        unusedcoins: mentee.unusedCoins,
+      },
+    });
+  } catch (error: any) {
+    console.log("Error fetching session recording link:", error);
+
+    return res.status(500).json({
+      status: "error",
+      message: error.message,
+    });
+  }
+};
+
 export const makeSubmission = async (req: Request, res: Response) => {
   try {
     const menteeId = req.user;
 
     if (!menteeId) {
-      return res.status(400).json({
+      return res.status(401).json({
         status: "error",
         message: "Unauthorized. Mentee not authenticated",
       });
@@ -154,6 +345,22 @@ export const makeSubmission = async (req: Request, res: Response) => {
       return res.status(400).json({
         status: "error",
         message: "Missing required fields",
+      });
+    }
+
+    const mentee = await User.findById(menteeId);
+
+    if (!mentee) {
+      return res.status(404).json({
+        status: "error",
+        message: "Mentee not found",
+      });
+    }
+
+    if (mentee.unusedCoins < 500) {
+      return res.status(400).json({
+        status: "error",
+        message: "Not enough coins",
       });
     }
 
@@ -179,25 +386,9 @@ export const makeSubmission = async (req: Request, res: Response) => {
     }
 
     // links added from the "Add link" modal
-    let linkResources: { filename: string; url: string }[] = [];
-
-    if (submittedLinks) {
-      try {
-        // If it already came as an array (browser case)
-        if (Array.isArray(submittedLinks)) {
-          linkResources = submittedLinks;
-        }
-        // If it came as a string (multipart/form-data case)
-        else if (typeof submittedLinks === "string") {
-          linkResources = JSON.parse(submittedLinks);
-        }
-      } catch {
-        return res.status(400).json({
-          status: "error",
-          message: "Invalid submittedLinks format",
-        });
-      }
-    }
+    const linkResources = parseFormArray<{ filename: string; url: string }>(
+      submittedLinks,
+    );
 
     // 1. Upload submittedFiles (if any)
     const files = (
@@ -241,10 +432,22 @@ export const makeSubmission = async (req: Request, res: Response) => {
       submittedLinks: linkResources,
     });
 
+    // Create discussion for the submission
+    const newDiscussion = await Discussion.create({
+      assignment: assignmentId,
+      mentee: menteeId,
+      mentor: assignment.mentor,
+    });
+
+    mentee.unusedCoins -= 500;
+    mentee.totalCoinsSpent += 500;
+    await mentee.save();
+
     return res.status(201).json({
       status: "success",
       data: {
         newSubmission,
+        unusedcoins: mentee.unusedCoins,
       },
     });
   } catch (error: any) {

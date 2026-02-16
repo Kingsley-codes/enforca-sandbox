@@ -60,6 +60,63 @@ export const userAuthenticate = async (
   }
 };
 
+export const authenticate = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    let token = req.cookies.access_token;
+
+    if (!token) {
+      res.status(401).json({
+        status: "fail",
+        message: "Not authorized, no token",
+      });
+      return;
+    }
+
+    const decoded = jwt.verify(
+      token,
+      process.env.JWT_SECRET as string,
+    ) as UserJwtPayload;
+
+    let currentUser = await User.findById(decoded.id).select("-password");
+    if (currentUser) {
+      req.user = currentUser._id;
+      return next();
+    } else {
+      currentUser = await Mentor.findById(decoded.id).select("-password");
+
+      if (currentUser) {
+        req.mentor = currentUser._id;
+        return next();
+      }
+    }
+
+    if (!currentUser) {
+      res.status(401).json({
+        status: "fail",
+        message: "User not found",
+      });
+      return;
+    }
+  } catch (err: any) {
+    console.error("Protect error:", err);
+    const message =
+      err.name === "JsonWebTokenError"
+        ? "Invalid token"
+        : err.name === "TokenExpiredError"
+          ? "Session expired"
+          : err.message;
+
+    res.status(401).json({
+      status: "fail",
+      message,
+    });
+  }
+};
+
 export const mentorAuthenticate = async (
   req: Request,
   res: Response,

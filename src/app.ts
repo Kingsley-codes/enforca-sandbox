@@ -11,6 +11,7 @@ import mentorDashboardRouter from "./routes/mentorDashboardRoutes.js";
 import userAuthRouter from "./routes/userAuthRoutes.js";
 import menteeDashboardRouter from "./routes/menteeDashboardRoutes.js";
 import paymentRouter from "./routes/paymentRoutes.js";
+import discussionRouter from "./routes/discussionRoutes.js";
 
 // Rate limiting configuration
 const limiter = rateLimit({
@@ -58,6 +59,7 @@ app.use("/api/auth", authRouter); // Register auth routes
 app.use("/api/mentor", mentorDashboardRouter); // Register mentor dashboard routes
 app.use("/api/mentee", menteeDashboardRouter); // Register mentor dashboard routes
 app.use("/api/users", userAuthRouter); // Register mentor dashboard routes
+app.use("/api/discussions", discussionRouter); // Register mentor dashboard routes
 app.use("/api/payment", paymentRouter); // Register mentor dashboard routes
 
 export default app;

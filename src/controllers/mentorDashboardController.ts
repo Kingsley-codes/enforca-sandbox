@@ -178,7 +178,7 @@ export const createSession = async (req: Request, res: Response) => {
 export const editSession = async (req: Request, res: Response) => {
   try {
     const mentor = req.mentor;
-    const sessionId = req.params.id;
+    const { sessionId } = req.params;
 
     if (!mentor) {
       return res.status(401).json({
@@ -346,7 +346,7 @@ export const editSession = async (req: Request, res: Response) => {
 export const deleteSession = async (req: Request, res: Response) => {
   try {
     const mentorId = req.mentor;
-    const sessionId = req.params.id;
+    const { sessionId } = req.params;
 
     if (!mentorId) {
       return res.status(401).json({
@@ -392,7 +392,7 @@ export const deleteSession = async (req: Request, res: Response) => {
 export const rescheduleSession = async (req: Request, res: Response) => {
   try {
     const mentor = req.mentor;
-    const sessionId = req.params.id;
+    const { sessionId } = req.params;
 
     if (!mentor) {
       return res.status(401).json({
@@ -437,7 +437,7 @@ export const rescheduleSession = async (req: Request, res: Response) => {
 export const addRecordingLink = async (req: Request, res: Response) => {
   try {
     const mentor = req.mentor;
-    const sessionId = req.params.id;
+    const { sessionId } = req.params;
 
     if (!mentor) {
       return res.status(401).json({
@@ -675,25 +675,9 @@ export const createAssignment = async (req: Request, res: Response) => {
     }
 
     // links added from the "Add link" modal
-    let linkResources: { filename: string; url: string }[] = [];
-
-    if (resourceLinks) {
-      try {
-        // If it already came as an array (browser case)
-        if (Array.isArray(resourceLinks)) {
-          linkResources = resourceLinks;
-        }
-        // If it came as a string (multipart/form-data case)
-        else if (typeof resourceLinks === "string") {
-          linkResources = JSON.parse(resourceLinks);
-        }
-      } catch {
-        return res.status(400).json({
-          status: "error",
-          message: "Invalid resourceLinks format",
-        });
-      }
-    }
+    const linkResources = parseFormArray<{ filename: string; url: string }>(
+      resourceLinks,
+    );
 
     // 2. Resolve mentor course + mentees
     const mentorCourse = await Mentor.findById(mentorId).select("course");
@@ -705,29 +689,10 @@ export const createAssignment = async (req: Request, res: Response) => {
       });
     }
 
-    let finalMentees: string[] | Types.ObjectId[];
+    let finalMentees: string[] | Types.ObjectId[] | undefined;
 
     if (mentees) {
-      try {
-        if (Array.isArray(mentees)) {
-          // could be ["id1","id2"] OR ['["id1","id2"]']
-          if (mentees.length === 1) {
-            const maybe = JSON.parse(mentees[0]);
-            finalMentees = Array.isArray(maybe) ? maybe : mentees;
-          } else {
-            finalMentees = mentees;
-          }
-        } else {
-          // string
-          const parsed = JSON.parse(mentees);
-          finalMentees = Array.isArray(parsed) ? parsed : [parsed];
-        }
-      } catch {
-        return res.status(400).json({
-          status: "error",
-          message: "Invalid mentees format",
-        });
-      }
+      finalMentees = parseFormArray<string>(mentees);
     } else {
       const allMentees = await User.find({
         course: mentorCourse.course,
@@ -768,7 +733,7 @@ export const createAssignment = async (req: Request, res: Response) => {
 export const editAssignment = async (req: Request, res: Response) => {
   try {
     const mentorId = req.mentor;
-    const assignmentId = req.params.id;
+    const { assignmentId } = req.params;
 
     if (!mentorId) {
       return res.status(400).json({
@@ -923,10 +888,10 @@ export const editAssignment = async (req: Request, res: Response) => {
 export const deleteAssignment = async (req: Request, res: Response) => {
   try {
     const mentorId = req.mentor;
-    const assignmentId = req.params.id;
+    const { assignmentId } = req.params;
 
     if (!mentorId) {
-      return res.status(400).json({
+      return res.status(401).json({
         status: "error",
         message: "Unauthorized. Mentor not authenticated",
       });
@@ -1015,7 +980,7 @@ export const gradeSubmission = async (req: Request, res: Response) => {
       });
     }
 
-    const submissionId = req.params.id;
+    const { submissionId } = req.params;
 
     const { gradeScore, feedback } = req.body;
 
