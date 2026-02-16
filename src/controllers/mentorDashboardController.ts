@@ -178,7 +178,7 @@ export const createSession = async (req: Request, res: Response) => {
 export const editSession = async (req: Request, res: Response) => {
   try {
     const mentor = req.mentor;
-    const { sessionId } = req.params;
+    const { id: sessionId } = req.params;
 
     if (!mentor) {
       return res.status(401).json({
@@ -346,7 +346,7 @@ export const editSession = async (req: Request, res: Response) => {
 export const deleteSession = async (req: Request, res: Response) => {
   try {
     const mentorId = req.mentor;
-    const { sessionId } = req.params;
+    const { id: sessionId } = req.params;
 
     if (!mentorId) {
       return res.status(401).json({
@@ -392,7 +392,7 @@ export const deleteSession = async (req: Request, res: Response) => {
 export const rescheduleSession = async (req: Request, res: Response) => {
   try {
     const mentor = req.mentor;
-    const { sessionId } = req.params;
+    const { id: sessionId } = req.params;
 
     if (!mentor) {
       return res.status(401).json({
@@ -437,7 +437,7 @@ export const rescheduleSession = async (req: Request, res: Response) => {
 export const addRecordingLink = async (req: Request, res: Response) => {
   try {
     const mentor = req.mentor;
-    const { sessionId } = req.params;
+    const { id: sessionId } = req.params;
 
     if (!mentor) {
       return res.status(401).json({
@@ -733,7 +733,7 @@ export const createAssignment = async (req: Request, res: Response) => {
 export const editAssignment = async (req: Request, res: Response) => {
   try {
     const mentorId = req.mentor;
-    const { assignmentId } = req.params;
+    const { id: assignmentId } = req.params;
 
     if (!mentorId) {
       return res.status(400).json({
@@ -888,7 +888,7 @@ export const editAssignment = async (req: Request, res: Response) => {
 export const deleteAssignment = async (req: Request, res: Response) => {
   try {
     const mentorId = req.mentor;
-    const { assignmentId } = req.params;
+    const { id: assignmentId } = req.params;
 
     if (!mentorId) {
       return res.status(401).json({
@@ -980,7 +980,7 @@ export const gradeSubmission = async (req: Request, res: Response) => {
       });
     }
 
-    const { submissionId } = req.params;
+    const { id: submissionId } = req.params;
 
     const { gradeScore, feedback } = req.body;
 

@@ -8,16 +8,26 @@ import {
   joinSession,
   makeSubmission,
 } from "../controllers/menteeDashboardControllers.js";
+import { uploadSubmissionFiles } from "../middleware/uploadMiddleware.js";
 
 const menteeDashboardRouter = express.Router();
 
-menteeDashboardRouter.get("/tasks", userAuthenticate, fetchMyAssignments);
+menteeDashboardRouter.get(
+  "/assignments/tasks",
+  userAuthenticate,
+  fetchMyAssignments,
+);
 
-menteeDashboardRouter.get("/projects", userAuthenticate, fetchMyProjects);
+menteeDashboardRouter.get(
+  "/assignments/projects",
+  userAuthenticate,
+  fetchMyProjects,
+);
 
 menteeDashboardRouter.post(
   "/assignments/submit",
   userAuthenticate,
+  uploadSubmissionFiles,
   makeSubmission,
 );
 

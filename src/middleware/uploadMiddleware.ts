@@ -78,6 +78,12 @@ export const uploadFileattachments = multer({
   fileFilter: resourceFileFilter,
 }).fields([{ name: "fileAttachments", maxCount: 5 }]);
 
+export const uploadSubmissionFiles = multer({
+  storage: resourceStorage,
+  limits: { fileSize: MAX_RESOURCE_FILE_SIZE },
+  fileFilter: resourceFileFilter,
+}).fields([{ name: "submissionFiles", maxCount: 5 }]);
+
 export const uploadProfilePhoto = multer({
   storage: resourceStorage,
   limits: { fileSize: MAX_FILE_SIZE },

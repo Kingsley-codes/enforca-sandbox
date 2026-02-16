@@ -103,7 +103,7 @@ export const fetchMyProjects = async (req: Request, res: Response) => {
 
     const projects = await Assignment.find({
       mentees: menteeId,
-      category: "projects",
+      category: "project",
     })
       .select("-mentor -mentees")
       .sort({ createdAt: -1 });
@@ -191,7 +191,7 @@ export const fetchMySessions = async (req: Request, res: Response) => {
 export const joinSession = async (req: Request, res: Response) => {
   try {
     const menteeId = req.user;
-    const { sessionId } = req.params;
+    const { id: sessionId } = req.params;
 
     if (!menteeId) {
       return res.status(401).json({
@@ -261,7 +261,7 @@ export const joinSession = async (req: Request, res: Response) => {
 export const getSessionRecording = async (req: Request, res: Response) => {
   try {
     const menteeId = req.user;
-    const { sessionId } = req.params;
+    const { id: sessionId } = req.params;
 
     if (!menteeId) {
       return res.status(401).json({
@@ -373,12 +373,14 @@ export const makeSubmission = async (req: Request, res: Response) => {
       });
     }
 
-    const existingSubmission = await Submission.find({
+    const existingSubmission = await Submission.findOne({
       assignment: assignmentId,
       mentee: menteeId,
     });
 
     if (existingSubmission) {
+      console.log(existingSubmission);
+
       return res.status(409).json({
         status: "error",
         message: "Assignment already submitted for this user",

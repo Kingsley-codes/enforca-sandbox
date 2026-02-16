@@ -32,6 +32,10 @@ const sessionSchema = new Schema(
     recordingLink: {
       type: String,
     },
+    recordingAvailable: {
+      type: Boolean,
+      default: false,
+    },
     timezone: {
       type: String,
       required: true,

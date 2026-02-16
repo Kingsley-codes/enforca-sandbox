@@ -7,7 +7,7 @@ import {
 
 const discussionRouter = express.Router();
 
-discussionRouter.post("/", authenticate, sendDiscussion);
-discussionRouter.get("/", authenticate, fetchSubmissionDiscussion);
+discussionRouter.post("/:id", authenticate, sendDiscussion);
+discussionRouter.get("/:id", authenticate, fetchSubmissionDiscussion);
 
 export default discussionRouter;

@@ -7,7 +7,7 @@ import {
 
 const userRouter = express.Router();
 
-userRouter.get("/user", userAuthenticate, fetchUserProfile);
+userRouter.get("/mentee", userAuthenticate, fetchUserProfile);
 userRouter.get("/mentor", userAuthenticate, fetchMentorProfile);
 
 export default userRouter;
