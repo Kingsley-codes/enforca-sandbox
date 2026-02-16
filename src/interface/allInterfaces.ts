@@ -26,9 +26,11 @@ export interface AuthResponse {
 export interface PaystackInitializeTransactionPayload {
   email: string;
   amount: number; // in kobo
-  reference: string;
-  callback_url: string;
-  metadata?: Record<string, any>;
+  invoiceRequestReference: string;
+  description: string;
+  firstName: string;
+  lastName: string;
+  hash: string;
 }
 
 export interface PaystackInitializeResponse {

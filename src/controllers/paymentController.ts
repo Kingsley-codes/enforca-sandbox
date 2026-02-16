@@ -1,6 +1,7 @@
 import { Request, response, Response } from "express";
 import User from "../models/userModel.js";
 import {
+  buildHash,
   generatePaymentID,
   generateReference,
   handleChargeFailed,
@@ -34,44 +35,25 @@ export const initializePayment = async (req: Request, res: Response) => {
       });
     }
 
-    const menteeName = mentee.firstName + "" + mentee.lastName;
-
-    const amountKobo = Math.round(Number(amount) * 100);
-
     const paymentID = generatePaymentID();
+
+    const invoiceReference = generateReference();
+
+    const hash = buildHash(
+      amount,
+      menteeEmail,
+      invoiceReference,
+      process.env.PAYMENT_SECRET_KEY!,
+    );
 
     const transactionData = {
       email: menteeEmail,
-      amount: amountKobo,
-      reference: generateReference(),
-      metadata: {
-        mentee_id: mentee,
-        mentee_name: menteeName,
-        mentee_email: menteeEmail,
-        payment_type: paymentType,
-        amount: amount,
-        payment_id: paymentID,
-        custom_fields: [
-          {
-            display_name: "Mentee Name",
-            variable_name: "mentee_name",
-            value: menteeName,
-          },
-          {
-            display_name: "Payment Type",
-            variable_name: "payment_type",
-            value: paymentType,
-          },
-          {
-            display_name: "Amount",
-            variable_name: "amount",
-            value: amount,
-          },
-        ],
-      },
-
-      callback_url: `${process.env.FRONTEND_URL}/donors/verifyPayment`,
-      // callback_url: "http://localhost:3000/donors/verifyPayment"
+      amount: amount,
+      description: paymentType,
+      firstName: mentee.firstName,
+      lastName: mentee.lastName,
+      invoiceRequestReference: invoiceReference,
+      hash: hash,
     };
 
     // Call Paystack API
@@ -83,7 +65,7 @@ export const initializePayment = async (req: Request, res: Response) => {
         success: false,
         message: "Failed to initialize transaction",
         error: paystackResponse.message,
-        reference: transactionData.reference,
+        reference: transactionData.invoiceRequestReference,
       });
     }
 
@@ -128,8 +110,10 @@ export const verifyPayment = async (req: Request, res: Response) => {
       });
     }
 
+    const hash = buildHash(reference, process.env.PAYMENT_SECRET_KEY!);
+
     // Call Paystack Verify API
-    const verificationResponse = await verifyTransaction(reference);
+    const verificationResponse = await verifyTransaction(reference, hash);
 
     if (!verificationResponse.status) {
       return res.status(400).json({

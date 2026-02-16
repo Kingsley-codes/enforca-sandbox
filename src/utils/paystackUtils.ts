@@ -8,12 +8,12 @@ if (!process.env.PAYSTACK_SECRET_KEY) {
   throw new Error("PAYSTACK_SECRET_KEY is not set");
 }
 
-const paystack = axios.create({
-  ...(process.env.PAYSTACK_BASE_URL && {
-    baseURL: process.env.PAYSTACK_BASE_URL,
+const clane = axios.create({
+  ...(process.env.CLANE_BASE_URL && {
+    baseURL: process.env.CLANE_BASE_URL,
   }),
   headers: {
-    Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
+    "x-business-id": `${process.env.CLANE_BUSINESS_ID}`,
     "Content-Type": "application/json",
   },
 });
@@ -22,11 +22,11 @@ export const initializePaystackTransaction = async (
   transactionData: PaystackInitializeTransactionPayload,
 ) => {
   try {
-    const response = await paystack.post<{
+    const response = await clane.post<{
       status: boolean;
       message: string;
       data: PaystackInitializeResponse;
-    }>("/transaction/initialize", transactionData);
+    }>("/", transactionData);
 
     // Return consistent format
     return {
@@ -36,7 +36,7 @@ export const initializePaystackTransaction = async (
     };
   } catch (error: any) {
     console.error(
-      "Paystack initialize transaction error:",
+      "Clane initialize transaction error:",
       error.response?.data || error.message,
     );
 
@@ -49,7 +49,7 @@ export const initializePaystackTransaction = async (
   }
 };
 
-export const verifyTransaction = async (reference: string) => {
-  const response = await paystack.get(`/transaction/verify/${reference}`);
+export const verifyTransaction = async (reference: string, hash: string) => {
+  const response = await clane.get(`/${reference}?hash=${hash}`);
   return response.data;
 };

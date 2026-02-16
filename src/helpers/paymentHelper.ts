@@ -7,9 +7,22 @@ export const generatePaymentID = () =>
   "ENF-" + Math.random().toString(36).substring(2, 10).toUpperCase();
 
 export const generateReference = (prefix = "ps") => {
-  const unique = crypto.randomBytes(12).toString("hex"); // 12-char random string
+  const unique = crypto.randomBytes(15).toString("hex"); // 15-char random string
   return `${prefix}_${unique}`;
 };
+
+export function buildHash(
+  amount?: string | number,
+  email?: string,
+  invoiceRequestReference?: string,
+  secretKey?: string,
+) {
+  const plain = `${amount}|${email}|${invoiceRequestReference}|${secretKey}`;
+
+  const hash = crypto.createHash("sha512").update(plain).digest("hex");
+
+  return hash;
+}
 
 export const handleChargeSuccess = async (eventData: PaystackEventData) => {
   let payment = null;
