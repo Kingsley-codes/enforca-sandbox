@@ -449,7 +449,7 @@ export const makeSubmission = async (req: Request, res: Response) => {
       mentor: assignment.mentor,
     });
 
-    await assignment.updateOne(
+    await Assignment.updateOne(
       {
         _id: assignmentId,
         "mentees.user": menteeId,
