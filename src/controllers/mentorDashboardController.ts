@@ -457,7 +457,10 @@ export const addRecordingLink = async (req: Request, res: Response) => {
 
     const session = await Session.findOneAndUpdate(
       { _id: sessionId, mentor },
-      { recordingLink },
+      {
+        recordingLink,
+        recordingAvailable: true,
+      },
       { new: true },
     );
 
@@ -689,16 +692,24 @@ export const createAssignment = async (req: Request, res: Response) => {
       });
     }
 
-    let finalMentees: string[] | Types.ObjectId[] | undefined;
+    let finalMentees: { user: Types.ObjectId; status: "assigned" }[];
 
     if (mentees) {
-      finalMentees = parseFormArray<string>(mentees);
+      const menteeIds = parseFormArray<string>(mentees) ?? [];
+
+      finalMentees = menteeIds.map((id) => ({
+        user: new Types.ObjectId(id),
+        status: "assigned",
+      }));
     } else {
       const allMentees = await User.find({
         course: mentorCourse.course,
       }).select("_id");
 
-      finalMentees = allMentees.map((m) => m._id);
+      finalMentees = allMentees.map((m) => ({
+        user: m._id,
+        status: "assigned",
+      }));
     }
 
     // 3. Create assignment
@@ -763,7 +774,6 @@ export const editAssignment = async (req: Request, res: Response) => {
       category,
       resourceLinks,
       dueTime,
-      status,
       deleteResources,
     } = req.body;
 
@@ -833,16 +843,35 @@ export const editAssignment = async (req: Request, res: Response) => {
     }
 
     // 5. Parse mentees
-    let finalMentees: string[] | Types.ObjectId[] | undefined;
+    let finalMentees: {
+      user: Types.ObjectId;
+      status: "assigned" | "submitted" | "graded" | "overdue";
+    }[];
 
     if (mentees !== undefined) {
-      finalMentees = parseFormArray<string>(mentees);
+      const existingMap = new Map(
+        assignment.mentees.map((m) => [m.user.toString(), m.status]),
+      );
+
+      const menteeIds = parseFormArray<string>(mentees) ?? [];
+
+      finalMentees = menteeIds.map((id) => ({
+        user: new Types.ObjectId(id),
+        status: existingMap.get(id) ?? "assigned",
+      }));
     } else {
       const allMentees = await User.find({
         course: mentorCourse.course,
       }).select("_id");
 
-      finalMentees = allMentees.map((m) => m._id);
+      const existingMap = new Map(
+        assignment.mentees.map((m) => [m.user.toString(), m.status]),
+      );
+
+      finalMentees = allMentees.map((m) => ({
+        user: m._id,
+        status: existingMap.get(m._id.toString()) ?? "assigned",
+      }));
     }
 
     // 6. Update assignment fields
@@ -852,12 +881,10 @@ export const editAssignment = async (req: Request, res: Response) => {
     if (dueTime) assignment.dueTime = dueTime;
     if (category) assignment.category = category;
     if (week && category === "task") assignment.week = week;
-    if (status) assignment.status = status;
 
-    if (finalMentees !== undefined) {
-      assignment.mentees = finalMentees.map((id) =>
-        typeof id === "string" ? new Types.ObjectId(id) : id,
-      );
+    if (mentees !== undefined) {
+      assignment.mentees.splice(0, assignment.mentees.length);
+      assignment.mentees.push(...finalMentees);
     }
 
     if (resourceLinks !== undefined && linkResources) {

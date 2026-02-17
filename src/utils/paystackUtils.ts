@@ -1,10 +1,10 @@
 import axios from "axios";
 import {
-  PaystackInitializeResponse,
-  PaystackInitializeTransactionPayload,
+  ClaneInitializeResponse,
+  ClaneInitializeTransactionPayload,
 } from "../interface/allInterfaces.js";
 
-if (!process.env.PAYSTACK_SECRET_KEY) {
+if (!process.env.CLANE_SECRET_KEY) {
   throw new Error("PAYSTACK_SECRET_KEY is not set");
 }
 
@@ -18,15 +18,15 @@ const clane = axios.create({
   },
 });
 
-export const initializePaystackTransaction = async (
-  transactionData: PaystackInitializeTransactionPayload,
+export const initializeClaneTransaction = async (
+  transactionData: ClaneInitializeTransactionPayload,
 ) => {
   try {
     const response = await clane.post<{
       status: boolean;
       message: string;
-      data: PaystackInitializeResponse;
-    }>("/", transactionData);
+      data: ClaneInitializeResponse;
+    }>("", transactionData);
 
     // Return consistent format
     return {

@@ -50,13 +50,17 @@ export const fetchMyAssignments = async (req: Request, res: Response) => {
               })}`;
     }
 
-    const assignments = await Assignment.find({
-      mentees: menteeId,
-      category: "task",
-      ...dateQuery,
-    })
-      .select("-mentor -mentees")
-      .sort({ createdAt: -1 });
+    const assignments = await Assignment.find(
+      {
+        "mentees.user": menteeId,
+        category: "task",
+        ...dateQuery,
+      },
+      {
+        mentees: { $elemMatch: { user: menteeId } },
+        mentor: 0,
+      },
+    ).sort({ createdAt: -1 });
 
     return res.status(200).json({
       status: "success",
@@ -101,12 +105,16 @@ export const fetchMyProjects = async (req: Request, res: Response) => {
       });
     }
 
-    const projects = await Assignment.find({
-      mentees: menteeId,
-      category: "project",
-    })
-      .select("-mentor -mentees")
-      .sort({ createdAt: -1 });
+    const projects = await Assignment.find(
+      {
+        "mentees.user": menteeId,
+        category: "project",
+      },
+      {
+        mentees: { $elemMatch: { user: menteeId } },
+        mentor: 0,
+      },
+    ).sort({ createdAt: -1 });
 
     return res.status(200).json({
       status: "success",
@@ -168,7 +176,7 @@ export const fetchMySessions = async (req: Request, res: Response) => {
       attendees: menteeId,
       ...dateQuery,
     })
-      .select("-mentor -attendees")
+      .select("-mentor -attendees -recordingLink")
       .sort({ createdAt: -1 });
 
     return res.status(200).json({
@@ -440,6 +448,18 @@ export const makeSubmission = async (req: Request, res: Response) => {
       mentee: menteeId,
       mentor: assignment.mentor,
     });
+
+    await assignment.updateOne(
+      {
+        _id: assignmentId,
+        "mentees.user": menteeId,
+      },
+      {
+        $set: {
+          "mentees.$.status": "submitted",
+        },
+      },
+    );
 
     mentee.unusedCoins -= 500;
     mentee.totalCoinsSpent += 500;

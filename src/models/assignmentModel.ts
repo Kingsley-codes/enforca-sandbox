@@ -1,5 +1,22 @@
 import { Schema, model, InferSchemaType, HydratedDocument } from "mongoose";
 
+const menteesSchema = new Schema(
+  {
+    user: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+
+    status: {
+      type: String,
+      enum: ["assigned", "submitted", "graded", "overdue"],
+      default: "assigned",
+    },
+  },
+  { _id: false },
+);
+
 const assignmentSchema = new Schema(
   {
     mentor: {
@@ -25,12 +42,7 @@ const assignmentSchema = new Schema(
         return this.category === "task";
       },
     },
-    mentees: [
-      {
-        type: Schema.Types.ObjectId,
-        ref: "User",
-      },
-    ],
+    mentees: [menteesSchema],
     resourcesLinks: [
       {
         filename: String,
@@ -58,11 +70,6 @@ const assignmentSchema = new Schema(
     dueTime: {
       type: String,
       required: true,
-    },
-    status: {
-      type: String,
-      enum: ["active", "overdue", "completed", "graded"],
-      default: "active",
     },
   },
   {

@@ -6,7 +6,7 @@ import { PaystackEventData } from "../interface/allInterfaces.js";
 export const generatePaymentID = () =>
   "ENF-" + Math.random().toString(36).substring(2, 10).toUpperCase();
 
-export const generateReference = (prefix = "ps") => {
+export const generateReference = (prefix = "clnx") => {
   const unique = crypto.randomBytes(15).toString("hex"); // 15-char random string
   return `${prefix}_${unique}`;
 };

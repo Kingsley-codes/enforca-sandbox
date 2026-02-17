@@ -23,7 +23,7 @@ export interface AuthResponse {
   stack?: string;
 }
 
-export interface PaystackInitializeTransactionPayload {
+export interface ClaneInitializeTransactionPayload {
   email: string;
   amount: number; // in kobo
   invoiceRequestReference: string;
@@ -33,10 +33,8 @@ export interface PaystackInitializeTransactionPayload {
   hash: string;
 }
 
-export interface PaystackInitializeResponse {
-  authorization_url: string;
-  access_code: string;
-  reference: string;
+export interface ClaneInitializeResponse {
+  paymentUrl: string;
 }
 
 export interface PaystackVerifyResponse {

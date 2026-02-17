@@ -8,7 +8,7 @@ import {
   handleChargeSuccess,
 } from "../helpers/paymentHelper.js";
 import {
-  initializePaystackTransaction,
+  initializeClaneTransaction,
   verifyTransaction,
 } from "../utils/paystackUtils.js";
 import Payment from "../models/paymentModel.js";
@@ -43,7 +43,7 @@ export const initializePayment = async (req: Request, res: Response) => {
       amount,
       menteeEmail,
       invoiceReference,
-      process.env.PAYMENT_SECRET_KEY!,
+      process.env.CLANE_SECRET_KEY!,
     );
 
     const transactionData = {
@@ -57,15 +57,14 @@ export const initializePayment = async (req: Request, res: Response) => {
     };
 
     // Call Paystack API
-    const paystackResponse =
-      await initializePaystackTransaction(transactionData);
+    const claneResponse = await initializeClaneTransaction(transactionData);
 
-    if (!paystackResponse.status || !("data" in paystackResponse)) {
+    if (!claneResponse.status || !("data" in claneResponse)) {
       return res.status(400).json({
         success: false,
         message: "Failed to initialize transaction",
-        error: paystackResponse.message,
-        reference: transactionData.invoiceRequestReference,
+        error: claneResponse.message,
+        reference: invoiceReference,
       });
     }
 
@@ -75,7 +74,7 @@ export const initializePayment = async (req: Request, res: Response) => {
       menteeEmail: menteeEmail,
       paymentType: paymentType,
       amount: amount,
-      transactionRef: paystackResponse.data.reference,
+      transactionRef: invoiceReference,
     });
 
     // Return success response
@@ -83,9 +82,8 @@ export const initializePayment = async (req: Request, res: Response) => {
       success: true,
       message: "Transaction initialized successfully",
       data: {
-        authorization_url: paystackResponse.data.authorization_url,
-        access_code: paystackResponse.data.access_code,
-        reference: paystackResponse.data.reference,
+        paymentUrl: claneResponse.data.paymentUrl,
+        reference: invoiceReference,
         paymentID: payment.paymentID,
       },
     });
@@ -110,7 +108,7 @@ export const verifyPayment = async (req: Request, res: Response) => {
       });
     }
 
-    const hash = buildHash(reference, process.env.PAYMENT_SECRET_KEY!);
+    const hash = buildHash(reference, process.env.CLANE_SECRET_KEY!);
 
     // Call Paystack Verify API
     const verificationResponse = await verifyTransaction(reference, hash);

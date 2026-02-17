@@ -7,8 +7,8 @@ import {
 
 const paymentRouter = express.Router();
 
-paymentRouter.post("/paystack/payment", initializePayment);
-paymentRouter.post("/paystack/verify", verifyPayment);
-paymentRouter.post("/paystack/webhook", handleWebhook);
+paymentRouter.post("/clane/payment", initializePayment);
+paymentRouter.post("/clane/verify", verifyPayment);
+paymentRouter.post("/clane/webhook", handleWebhook);
 
 export default paymentRouter;
