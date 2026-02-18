@@ -125,7 +125,6 @@ export const verifyPayment = async (req: Request, res: Response) => {
     }
 
     const transactionData = verificationResponse.data;
-    console.log("transaction data:", transactionData);
 
     // Find donation record by transactionRef
     const payment = await Payment.findOne({ transactionRef: reference });
@@ -193,7 +192,7 @@ export const verifyPayment = async (req: Request, res: Response) => {
           paymentID: payment.paymentID,
           menteeEmail: payment.menteeEmail,
           amount: payment.amount,
-          paymentType: payment.paymentType,
+          paymentType: paymentType,
         },
       });
     }

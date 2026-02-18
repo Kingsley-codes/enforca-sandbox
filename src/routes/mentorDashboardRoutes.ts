@@ -14,6 +14,9 @@ import {
   addRecordingLink,
   gradeSubmission,
   getAllSubmissions,
+  fetchMentorProjects,
+  fetchMenteeAssignments,
+  fetchMenteesList,
 } from "../controllers/mentorDashboardController.js";
 import {
   handleUploadErrors,
@@ -124,6 +127,28 @@ mentorDashboardRouter.patch(
   requireRole("mentor"),
   mentorAuthenticate,
   gradeSubmission,
+);
+
+mentorDashboardRouter.get(
+  "/mentees/user-projects/:id",
+  mentorAuthenticate,
+  requireRole("mentor"),
+  mentorAuthenticate,
+  fetchMentorProjects,
+);
+
+mentorDashboardRouter.get(
+  "/mentees/user-tasks/:id",
+  mentorAuthenticate,
+  requireRole("mentor"),
+  fetchMenteeAssignments,
+);
+
+mentorDashboardRouter.get(
+  "/sessions/mentees",
+  mentorAuthenticate,
+  requireRole("mentor"),
+  fetchMenteesList,
 );
 
 export default mentorDashboardRouter;

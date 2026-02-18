@@ -245,6 +245,30 @@ export const joinSession = async (req: Request, res: Response) => {
       });
     }
 
+    const alreadyAttended = mentee.sessions?.some(
+      (s) => s.session.toString() === sessionId && s.attended === true,
+    );
+
+    if (alreadyAttended) {
+      return res.status(400).json({
+        status: "error",
+        message: "Session already joined",
+      });
+    }
+
+    // ✅ mark this session as attended for this user
+    await User.updateOne(
+      {
+        _id: menteeId,
+        "sessions.session": session._id,
+      },
+      {
+        $set: {
+          "sessions.$.attended": true,
+        },
+      },
+    );
+
     mentee.unusedCoins -= 500;
     mentee.totalCoinsSpent += 500;
     mentee.totalAttendance += 1;

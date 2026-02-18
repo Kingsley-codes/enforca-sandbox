@@ -1,6 +1,27 @@
 import { Schema, model, InferSchemaType, HydratedDocument } from "mongoose";
 import validator from "validator";
 
+const sessionSchema = new Schema(
+  {
+    session: {
+      type: Schema.Types.ObjectId,
+      ref: "Session",
+      required: true,
+    },
+    title: {
+      type: String,
+    },
+    attended: {
+      type: Boolean,
+      default: false,
+    },
+    date: {
+      type: Date,
+    },
+  },
+  { _id: false },
+);
+
 const userSchema = new Schema(
   {
     firstName: {
@@ -89,6 +110,7 @@ const userSchema = new Schema(
     address: {
       type: String,
     },
+    sessions: [sessionSchema],
     gender: {
       type: String,
       enum: ["male", "female"],

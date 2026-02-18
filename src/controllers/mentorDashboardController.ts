@@ -321,6 +321,22 @@ export const createSession = async (req: Request, res: Response) => {
       fileLinks: linkAttachments,
     });
 
+    // 👉 populate users with this session
+    await User.updateMany(
+      {
+        _id: { $in: finalMentees },
+      },
+      {
+        $push: {
+          sessions: {
+            session: session._id,
+            title: session.title,
+            date: session.date,
+          },
+        },
+      },
+    );
+
     return res.status(201).json({
       status: "success",
       data: {
@@ -485,11 +501,67 @@ export const editSession = async (req: Request, res: Response) => {
       session.fileAttachments.push(...uploadedAttachments);
     }
 
-    if (finalMentees !== undefined) {
-      session.attendees = finalMentees.map((id) =>
-        typeof id === "string" ? new Types.ObjectId(id) : id,
+    // old list (before save)
+    const oldAttendees = session.attendees.map(
+      (id: any) => new Types.ObjectId(id),
+    );
+
+    // normalize new list
+    const newAttendees = finalMentees
+      ? finalMentees.map((id) =>
+          typeof id === "string" ? new Types.ObjectId(id) : id,
+        )
+      : session.attendees;
+
+    // helper sets
+    const newSet = new Set(newAttendees.map((i) => i.toString()));
+    const oldSet = new Set(oldAttendees.map((i) => i.toString()));
+
+    const removed = [...oldSet].filter((id) => !newSet.has(id));
+    const added = [...newSet].filter((id) => !oldSet.has(id));
+
+    // 1. remove session from removed users
+    if (removed.length) {
+      await User.updateMany(
+        { _id: { $in: removed.map((id) => new Types.ObjectId(id)) } },
+        {
+          $pull: {
+            sessions: { session: session._id },
+          },
+        },
       );
     }
+
+    // 2. add session to newly added users
+    if (added.length) {
+      await User.updateMany(
+        { _id: { $in: added.map((id) => new Types.ObjectId(id)) } },
+        {
+          $push: {
+            sessions: {
+              session: session._id,
+              title: title ?? session.title,
+              date: date ? new Date(date) : session.date,
+              attended: false,
+            },
+          },
+        },
+      );
+    }
+
+    // 3. update title/date for users that still have the session
+    await User.updateMany(
+      {
+        _id: { $in: newAttendees },
+        "sessions.session": session._id,
+      },
+      {
+        $set: {
+          "sessions.$.title": title ?? session.title,
+          "sessions.$.date": date ? new Date(date) : session.date,
+        },
+      },
+    );
 
     await session.save();
 
@@ -1243,6 +1315,285 @@ export const gradeSubmission = async (req: Request, res: Response) => {
     });
   } catch (error: any) {
     console.log("Error grading submission:", error);
+    return res.status(500).json({
+      status: "error",
+      message: error.message,
+    });
+  }
+};
+
+export const fetchMenteeAssignments = async (req: Request, res: Response) => {
+  try {
+    const mentor = req.mentor;
+
+    if (!mentor) {
+      return res.status(401).json({
+        status: "error",
+        message: "Unauthorized. Mentor not authenticated",
+      });
+    }
+
+    const menteeId = req.params.id as string;
+
+    const { filterType, referenceDate, offset } = req.query as {
+      filterType?: DateFilterType;
+      referenceDate?: string;
+      offset?: string;
+    };
+
+    let dateMatch: any = {};
+    let currentPeriodLabel: string | null = null;
+
+    if (filterType) {
+      const { start, end } = getDateRange(
+        filterType,
+        referenceDate ? new Date(referenceDate) : undefined,
+        offset ? parseInt(offset) : 0,
+      );
+
+      dateMatch = {
+        dueDate: { $gte: start, $lte: end },
+      };
+
+      currentPeriodLabel =
+        filterType === "day"
+          ? start.toISOString().slice(0, 10)
+          : filterType === "week"
+            ? `${start.toISOString().slice(0, 10)} to ${end
+                .toISOString()
+                .slice(0, 10)}`
+            : start.toLocaleString("default", {
+                month: "long",
+                year: "numeric",
+              });
+    }
+
+    const assignments = await Assignment.aggregate([
+      {
+        $match: {
+          mentor: mentor,
+          category: "task",
+          "mentees.user": new Types.ObjectId(menteeId),
+          ...dateMatch,
+        },
+      },
+
+      // keep only this mentee in the mentees array
+      {
+        $addFields: {
+          mentees: {
+            $filter: {
+              input: "$mentees",
+              as: "m",
+              cond: {
+                $eq: ["$$m.user", new Types.ObjectId(menteeId)],
+              },
+            },
+          },
+        },
+      },
+
+      // join submissions
+      {
+        $lookup: {
+          from: "submissions",
+          let: { assignmentId: "$_id" },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [
+                    { $eq: ["$assignment", "$$assignmentId"] },
+                    { $eq: ["$mentee", new Types.ObjectId(menteeId)] },
+                    { $eq: ["$status", "graded"] },
+                  ],
+                },
+              },
+            },
+            {
+              $project: {
+                grade: 1,
+                gradeDate: 1,
+                mentorFeedback: 1,
+                _id: 0,
+              },
+            },
+          ],
+          as: "submission",
+        },
+      },
+
+      // flatten submission (0 or 1)
+      {
+        $addFields: {
+          submission: { $arrayElemAt: ["$submission", 0] },
+        },
+      },
+
+      {
+        $sort: { createdAt: -1 },
+      },
+
+      {
+        $project: {
+          mentor: 0,
+        },
+      },
+    ]);
+
+    return res.status(200).json({
+      status: "success",
+      data: {
+        assignments,
+        currentPeriod: currentPeriodLabel,
+      },
+    });
+  } catch (error: any) {
+    console.log("Error fetching mentee assignments:", error);
+    return res.status(500).json({
+      status: "error",
+      message: error.message,
+    });
+  }
+};
+
+export const fetchMentorProjects = async (req: Request, res: Response) => {
+  try {
+    const mentor = req.mentor;
+
+    if (!mentor) {
+      return res.status(401).json({
+        status: "error",
+        message: "Unauthorized. Mentor not authenticated",
+      });
+    }
+
+    const menteeId = req.params.id as string;
+
+    const mentee = await User.findById(menteeId);
+
+    if (!mentee) {
+      return res.status(404).json({
+        status: "error",
+        message: "Mentee not found",
+      });
+    }
+
+    const projects = await Assignment.aggregate([
+      {
+        $match: {
+          mentor: mentor,
+          category: "project",
+          "mentees.user": new Types.ObjectId(menteeId),
+        },
+      },
+
+      // keep only this mentee in the mentees array
+      {
+        $addFields: {
+          mentees: {
+            $filter: {
+              input: "$mentees",
+              as: "m",
+              cond: {
+                $eq: ["$$m.user", new Types.ObjectId(menteeId)],
+              },
+            },
+          },
+        },
+      },
+
+      // join submissions
+      {
+        $lookup: {
+          from: "submissions",
+          let: { assignmentId: "$_id" },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [
+                    { $eq: ["$assignment", "$$assignmentId"] },
+                    { $eq: ["$mentee", new Types.ObjectId(menteeId)] },
+                    { $eq: ["$status", "graded"] },
+                  ],
+                },
+              },
+            },
+            {
+              $project: {
+                grade: 1,
+                gradeDate: 1,
+                mentorFeedback: 1,
+                _id: 0,
+              },
+            },
+          ],
+          as: "submission",
+        },
+      },
+
+      // flatten submission (0 or 1)
+      {
+        $addFields: {
+          submission: { $arrayElemAt: ["$submission", 0] },
+        },
+      },
+
+      {
+        $sort: { createdAt: -1 },
+      },
+
+      {
+        $project: {
+          mentor: 0,
+        },
+      },
+    ]);
+
+    return res.status(200).json({
+      status: "success",
+      data: projects,
+    });
+  } catch (error: any) {
+    console.log("Error fetching mentee projects:", error);
+    return res.status(500).json({
+      status: "error",
+      message: error.message,
+    });
+  }
+};
+
+export const fetchMenteesList = async (req: Request, res: Response) => {
+  try {
+    const mentorId = req.mentor;
+    if (!mentorId) {
+      return res.status(401).json({
+        status: "error",
+        message: "Unauthorized. Mentor not authenticated",
+      });
+    }
+
+    const mentorCourse = await Mentor.findById(mentorId).select("course");
+
+    const mentees = await User.find({ course: mentorCourse?.course }).select(
+      "firstName lastName",
+    );
+
+    if (!mentees || mentees.length === 0) {
+      return res.status(404).json({
+        status: "error",
+        message: "No mentees found for this mentor",
+      });
+    }
+
+    return res.status(200).json({
+      status: "success",
+      data: {
+        mentees,
+      },
+    });
+  } catch (error: any) {
     return res.status(500).json({
       status: "error",
       message: error.message,
