@@ -17,7 +17,7 @@ import crypto from "crypto";
 
 export const initializePayment = async (req: Request, res: Response) => {
   try {
-    const { menteeId, menteeEmail, paymentType, amount } = req.body;
+    const { menteeId, menteeEmail, paymentType, amount, currency } = req.body;
 
     if (!menteeId || !menteeEmail || !paymentType || !amount) {
       return res.status(400).json({
@@ -51,6 +51,7 @@ export const initializePayment = async (req: Request, res: Response) => {
       email: menteeEmail,
       amount: amount,
       description: paymentType,
+      currency: currency,
       firstName: mentee.firstName,
       lastName: mentee.lastName,
       invoiceRequestReference: invoiceReference,
