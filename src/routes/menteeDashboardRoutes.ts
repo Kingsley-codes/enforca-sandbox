@@ -5,6 +5,7 @@ import {
   fetchMyProjects,
   fetchMySessions,
   getSessionRecording,
+  getSubmission,
   joinSession,
   makeSubmission,
 } from "../controllers/menteeDashboardControllers.js";
@@ -22,6 +23,12 @@ menteeDashboardRouter.get(
   "/assignments/projects",
   userAuthenticate,
   fetchMyProjects,
+);
+
+menteeDashboardRouter.get(
+  "/assignments/submission/:id",
+  userAuthenticate,
+  getSubmission,
 );
 
 menteeDashboardRouter.post(

@@ -486,3 +486,42 @@ export const makeSubmission = async (req: Request, res: Response) => {
     });
   }
 };
+
+export const getSubmission = async (req: Request, res: Response) => {
+  try {
+    const menteeId = req.user;
+
+    if (!menteeId) {
+      return res.status(401).json({
+        status: "error",
+        message: "Unauthorized. Mentee not authenticated",
+      });
+    }
+
+    const { id: assignmentId } = req.params;
+
+    const submission = await Submission.findOne({
+      assignment: assignmentId,
+      mentee: menteeId,
+    });
+
+    if (!submission) {
+      return res.status(404).json({
+        status: "error",
+        message: "Submission not found",
+      });
+    }
+
+    return res.status(200).json({
+      status: "success",
+      data: submission,
+    });
+  } catch (error: any) {
+    console.log("Error fetching submission:", error);
+
+    return res.status(500).json({
+      status: "error",
+      message: error.message,
+    });
+  }
+};
