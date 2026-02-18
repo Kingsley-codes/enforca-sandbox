@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import Discussion from "../models/discussionsModel.js";
-import { sendDiscussionMessage } from "../utils/sendDiscussionService.js";
+import Submission from "../models/submissionModel.js";
+import { Types } from "mongoose";
 
 export const fetchSubmissionDiscussion = async (
   req: Request,
@@ -9,7 +10,7 @@ export const fetchSubmissionDiscussion = async (
   try {
     const userId = req.user || req.mentor;
 
-    const { discussionId } = req.params;
+    const { id: submissionId } = req.params;
 
     if (!userId) {
       return res.status(401).json({
@@ -19,7 +20,7 @@ export const fetchSubmissionDiscussion = async (
     }
 
     const discussion = await Discussion.findOne({
-      discussionId,
+      submission: submissionId,
     });
 
     if (!discussion) {
@@ -29,10 +30,11 @@ export const fetchSubmissionDiscussion = async (
       });
     }
 
-    const chatUser = discussion?.mentor ?? discussion?.mentee;
+    const isMentor = discussion.mentor.toString() === userId.toString();
+    const isMentee = discussion.mentee.toString() === userId.toString();
 
-    if (userId !== chatUser) {
-      return res.status(400).json({
+    if (!isMentor && !isMentee) {
+      return res.status(403).json({
         status: "error",
         message: "Discussion access denied for this user",
       });
@@ -59,14 +61,22 @@ export const fetchSubmissionDiscussion = async (
 export const sendDiscussion = async (req: Request, res: Response) => {
   try {
     const userId = req.user || req.mentor;
-    const userType = req.user ? "mentee" : "mentor";
 
-    const { discussionId } = req.params;
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: "User not authorized",
+      });
+    }
 
-    if (!discussionId || Array.isArray(discussionId)) {
+    const senderRole = req.mentor ? "Mentor" : "Mentee"; // must match schema
+
+    const { id: submissionId } = req.params;
+
+    if (!submissionId) {
       return res.status(400).json({
         success: false,
-        message: "discussionId is required",
+        message: "Submission ID is required",
       });
     }
 
@@ -79,46 +89,61 @@ export const sendDiscussion = async (req: Request, res: Response) => {
       });
     }
 
-    if (!userId) {
-      return res.status(401).json({
+    const submission = await Submission.findById(submissionId);
+
+    if (!submission) {
+      return res.status(404).json({
         success: false,
-        message: "User not authorized",
+        message: "Submission not found",
       });
     }
 
-    const discussion = await Discussion.findOne({
-      discussionId,
+    let discussion = await Discussion.findOne({
+      submission: submissionId,
     });
 
-    if (!discussion) {
-      return res.status(404).json({
-        status: "error",
-        message: "Discussion not found",
-      });
-    }
+    // ✅ permission check using submission (safer)
+    const isMentor = submission.mentor?.toString() === userId.toString();
+    const isMentee = submission.mentee?.toString() === userId.toString();
 
-    const chatUser = discussion.mentor ?? discussion?.mentee;
-
-    if (!chatUser?.equals(userId)) {
-      return res.status(400).json({
-        status: "error",
+    if (!isMentor && !isMentee) {
+      return res.status(403).json({
+        success: false,
         message: "Discussion access denied for this user",
       });
     }
 
-    const newDiscussion = await sendDiscussionMessage({
-      discussionId,
-      userId,
-      userType,
+    const newMessage = {
+      sender: new Types.ObjectId(userId),
+      senderRole,
       message,
-    });
+    };
+
+    // ✅ if discussion does NOT exist → create
+
+    if (!discussion) {
+      discussion = await Discussion.create({
+        submission: submission._id,
+        mentor: submission.mentor,
+        mentee: submission.mentee,
+        conversation: [newMessage],
+      });
+    } else {
+      // ✅ if discussion exists → push message
+
+      discussion.conversation.push(newMessage);
+      await discussion.save();
+    }
 
     return res.status(201).json({
       success: true,
-      messageData: newDiscussion,
+      messageData: discussion.conversation.at(-1),
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error("Error sending message:", error);
-    return res.status(500).json({ error: "Failed to send message" });
+    return res.status(500).json({
+      success: false,
+      message: "Failed to send message",
+    });
   }
 };

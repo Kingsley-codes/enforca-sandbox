@@ -1199,6 +1199,18 @@ export const gradeSubmission = async (req: Request, res: Response) => {
       });
     }
 
+    await Assignment.updateOne(
+      {
+        _id: submission.assignment,
+        "mentees.user": submission.mentee,
+      },
+      {
+        $set: {
+          "mentees.$.status": "submitted",
+        },
+      },
+    );
+
     const result = await Submission.aggregate([
       {
         $match: {

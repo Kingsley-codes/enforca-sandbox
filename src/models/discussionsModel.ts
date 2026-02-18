@@ -10,7 +10,7 @@ const coversationSchema = new Schema(
     senderRole: {
       type: String,
       required: true,
-      enum: ["Mentor", "User"],
+      enum: ["Mentor", "Mentee"],
     },
     message: {
       type: String,
@@ -26,9 +26,9 @@ const coversationSchema = new Schema(
 
 const discussionSchema = new Schema(
   {
-    assignment: {
+    submission: {
       type: Schema.Types.ObjectId,
-      ref: "Assignment",
+      ref: "Submission",
       required: true,
     },
     mentor: {
