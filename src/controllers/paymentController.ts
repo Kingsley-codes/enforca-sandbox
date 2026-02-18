@@ -76,6 +76,7 @@ export const initializePayment = async (req: Request, res: Response) => {
       menteeEmail: menteeEmail,
       paymentType: paymentType,
       amount: amount,
+      currency: currency,
       transactionRef: invoiceReference,
     });
 
