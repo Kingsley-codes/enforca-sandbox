@@ -12,6 +12,7 @@ import menteeDashboardRouter from "./routes/menteeDashboardRoutes.js";
 import paymentRouter from "./routes/paymentRoutes.js";
 import discussionRouter from "./routes/discussionRoutes.js";
 import userRouter from "./routes/userRoutes.js";
+import "./utils/assignmentCron.js";
 
 // Rate limiting configuration
 const limiter = rateLimit({
@@ -40,6 +41,8 @@ app.use(compression());
 app.use(cookieParser());
 app.use(express.urlencoded({ extended: true }));
 app.use(helmet());
+
+app.set("trust proxy", 1);
 app.use(limiter);
 app.use((req, res, next) => {
   req.body = sanitize(req.body);

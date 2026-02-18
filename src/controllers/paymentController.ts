@@ -2,6 +2,7 @@ import { Request, response, Response } from "express";
 import User from "../models/userModel.js";
 import {
   buildHash,
+  buildverifyHash,
   generatePaymentID,
   generateReference,
   handleChargeFailed,
@@ -99,7 +100,7 @@ export const initializePayment = async (req: Request, res: Response) => {
 
 export const verifyPayment = async (req: Request, res: Response) => {
   try {
-    const { reference } = req.body;
+    const reference = req.params.reference as string | undefined;
 
     if (!reference) {
       return res.status(400).json({
@@ -108,7 +109,7 @@ export const verifyPayment = async (req: Request, res: Response) => {
       });
     }
 
-    const hash = buildHash(reference, process.env.CLANE_SECRET_KEY!);
+    const hash = buildverifyHash(reference, process.env.CLANE_SECRET_KEY!);
 
     // Call Paystack Verify API
     const verificationResponse = await verifyTransaction(reference, hash);
@@ -122,9 +123,10 @@ export const verifyPayment = async (req: Request, res: Response) => {
     }
 
     const transactionData = verificationResponse.data;
+    console.log("transaction data:", transactionData);
 
     // Find donation record by transactionRef
-    const payment = await Payment.findOne({ transactionRef: reference });
+    const payment = await Payment.findOne({ transactionData: reference });
 
     if (!payment) {
       return res.status(404).json({
@@ -133,17 +135,8 @@ export const verifyPayment = async (req: Request, res: Response) => {
       });
     }
 
-    // If cancelled already, don't proceed
-    if (payment.paymentStatus === "Cancelled") {
-      return res.status(400).json({
-        success: false,
-        message: "Transaction was already marked as cancelled",
-        status: payment.paymentStatus,
-      });
-    }
-
     // If failed → mark failed
-    if (transactionData.status === "failed") {
+    if (transactionData.status === "FAILED") {
       payment.paymentStatus = "Failed";
       await payment.save();
 
@@ -154,7 +147,7 @@ export const verifyPayment = async (req: Request, res: Response) => {
     }
 
     // ✅ Only proceed if Paystack says it's successful
-    if (transactionData.status === "success") {
+    if (transactionData.status === "SUCCESS") {
       if (payment.paymentStatus === "Completed") {
         // ✅ Handle second verification attempt gracefully
         return res.status(200).json({
@@ -172,6 +165,24 @@ export const verifyPayment = async (req: Request, res: Response) => {
       payment.date = new Date();
 
       await payment.save();
+
+      const mentee = await User.findById(payment.mentee);
+
+      if (!mentee) {
+        console.log("Mentee not found with the userId:", payment.mentee);
+
+        throw new Error("Mentee not found");
+      }
+
+      let paymentType = payment.paymentType;
+
+      if ((paymentType = "coins")) {
+        mentee.unusedCoins += 5000;
+        await mentee.save();
+      } else {
+        mentee.isPremium = true;
+        await mentee.save();
+      }
 
       return res.status(200).json({
         success: true,
@@ -203,50 +214,35 @@ export const verifyPayment = async (req: Request, res: Response) => {
 // Handle webhook from Paystack (idempotent, final source of truth)
 export const handleWebhook = async (req: Request, res: Response) => {
   try {
-    const secret = process.env.PAYSTACK_SECRET_KEY;
-    const signature = req.headers["x-paystack-signature"];
+    const eventData = req.body;
 
-    if (!signature) {
-      return res.status(400).send("No signature");
+    if (!req.body) {
+      return res.status(400).json({
+        success: false,
+        message: "Empty webhook body",
+      });
     }
 
-    if (!secret) {
-      return res.status(500).send("Paystack secret key not configured");
-    }
+    console.log("Received Webhook Event:", eventData);
 
-    const hash = crypto
-      .createHmac("sha512", secret)
-      .update(JSON.stringify(req.body))
-      .digest("hex");
-
-    if (hash !== signature) {
-      return res.status(400).send("Invalid signature");
-    }
-
-    const event = req.body;
-    const eventData = event.data;
-
-    console.log(`Received Webhook Event: ${event.event}`, eventData.reference);
-
-    // Acknowledge receipt immediately to prevent Paystack retries
-    res.sendStatus(200);
+    const status = eventData.status?.toLowerCase();
 
     // Process the event asynchronously after acknowledging
-    switch (event.event) {
-      case "charge.success":
-        await handleChargeSuccess(event.data);
+    switch (status) {
+      case "success":
+        await handleChargeSuccess(eventData);
         break;
 
-      case "charge.failed":
-      case "charge.abandoned":
-        await handleChargeFailed(event.data);
+      case "failed":
+        await handleChargeFailed(eventData);
         break;
 
       default:
-        console.log(`Unhandled event type: ${event.event}`);
+        console.log(`Unhandled event type: ${eventData}`);
     }
 
-    return res;
+    // Always respond to Clane quickly to prevent retries
+    return res.status(200).json({ received: true });
   } catch (error) {
     // IMPORTANT: We already sent a 200, so we can only log the error.
     console.error("Error in async webhook processing:", error);

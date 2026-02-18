@@ -53,8 +53,8 @@ export interface PaystackVerifyResponse {
 }
 
 export interface PaystackEventData {
-  reference: string;
-  paid_at: string; // ISO date string
+  invoiceRequestReference: string;
+  transactionDate: string; // ISO date string
 }
 
 // export const verifyTransaction = async (reference: string) => {

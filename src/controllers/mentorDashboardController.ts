@@ -108,54 +108,64 @@ export const fetchMentees = async (req: Request, res: Response) => {
          Flatten lookup results
       ------------------------------------- */
       {
-        $addFields: {
-          totalTasks: {
-            $ifNull: [{ $first: "$taskStats.totalTasks" }, 0],
-          },
-          pendingTasks: {
-            $ifNull: [{ $first: "$taskStats.pendingTasks" }, 0],
-          },
-          submittedTasks: {
-            $ifNull: [{ $first: "$taskStats.submittedTasks" }, 0],
-          },
-          overdueTasks: {
-            $ifNull: [{ $first: "$taskStats.overdueTasks" }, 0],
-          },
-        },
-      },
-
-      {
-        $addFields: {
-          totalSessions: {
-            $ifNull: [{ $first: "$sessionStats.totalSessions" }, 0],
+        $set: {
+          taskStats: {
+            $ifNull: [
+              { $first: "$taskStats" },
+              {
+                totalTasks: 0,
+                pendingTasks: 0,
+                submittedTasks: 0,
+                overdueTasks: 0,
+              },
+            ],
           },
         },
       },
-
-      /* ------------------------------------
-         Compute averages
-      ------------------------------------- */
       {
-        $addFields: {
+        $set: {
+          totalTasks: "$taskStats.totalTasks",
+          pendingTasks: "$taskStats.pendingTasks",
+          submittedTasks: "$taskStats.submittedTasks",
+          overdueTasks: "$taskStats.overdueTasks",
+        },
+      },
+      {
+        $unset: "taskStats",
+      },
+
+      {
+        $set: {
+          sessionStats: {
+            $ifNull: [{ $first: "$sessionStats" }, { totalSessions: 0 }],
+          },
+        },
+      },
+      {
+        $set: {
+          totalSessions: "$sessionStats.totalSessions",
+        },
+      },
+      {
+        $unset: "sessionStats",
+      },
+
+      {
+        $set: {
           avrAttendance: {
             $cond: [
               { $gt: ["$totalSessions", 0] },
-              { $divide: ["$totalAttendance", "$totalSessions"] },
-              0,
-            ],
-          },
-        },
-      },
-
-      {
-        $addFields: {
-          missedAttendance: {
-            $max: [
               {
-                $subtract: ["$totalSessions", "$totalAttendance"],
+                $multiply: [
+                  { $divide: ["$totalAttendance", "$totalSessions"] },
+                  100,
+                ],
               },
               0,
             ],
+          },
+          missedAttendance: {
+            $max: [{ $subtract: ["$totalSessions", "$totalAttendance"] }, 0],
           },
         },
       },
