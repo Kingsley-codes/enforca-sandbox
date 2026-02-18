@@ -247,6 +247,7 @@ export const joinSession = async (req: Request, res: Response) => {
 
     mentee.unusedCoins -= 500;
     mentee.totalCoinsSpent += 500;
+    mentee.totalAttendance += 1;
     await mentee.save();
 
     return res.status(200).json({
@@ -387,7 +388,10 @@ export const makeSubmission = async (req: Request, res: Response) => {
     });
 
     if (existingSubmission) {
-      console.log(existingSubmission);
+      console.log(
+        "Submission already exists for this assignment",
+        existingSubmission,
+      );
 
       return res.status(409).json({
         status: "error",

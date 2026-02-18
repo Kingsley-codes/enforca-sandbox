@@ -15,6 +15,7 @@ import Submission from "../models/submissionModel.js";
 export const fetchMentees = async (req: Request, res: Response) => {
   try {
     const mentorId = req.mentor;
+
     if (!mentorId) {
       return res.status(401).json({
         status: "error",
@@ -22,25 +23,177 @@ export const fetchMentees = async (req: Request, res: Response) => {
       });
     }
 
-    const mentorCourse = await Mentor.findById(mentorId).select("course");
+    const mentor = await Mentor.findById(mentorId).select("course");
 
-    const mentees = await User.find({ course: mentorCourse?.course }).select(
-      "firstName lastName email course profilePhoto totalAttendance missed aveGrade progress",
-    );
+    if (!mentor) {
+      return res.status(404).json({
+        status: "error",
+        message: "Mentor not found",
+      });
+    }
 
-    if (!mentees || mentees.length === 0) {
+    const mentees = await User.aggregate([
+      /* Only mentees in this mentor's course */
+      {
+        $match: {
+          course: mentor.course,
+        },
+      },
+
+      /* Count attended sessions
+         (from mentor_sessions collection) */
+      {
+        $lookup: {
+          from: "mentor_sessions",
+          let: { menteeId: "$_id" },
+          pipeline: [
+            {
+              $match: {
+                $expr: { $in: ["$$menteeId", "$attendees"] },
+              },
+            },
+            {
+              $count: "totalSessions",
+            },
+          ],
+          as: "sessionStats",
+        },
+      },
+
+      /* Count submitted tasks */
+      {
+        $lookup: {
+          from: "assignments",
+          let: { menteeId: "$_id" },
+          pipeline: [
+            {
+              $match: { category: "task" },
+            },
+            { $unwind: "$mentees" },
+            {
+              $match: {
+                $expr: { $eq: ["$mentees.user", "$$menteeId"] },
+              },
+            },
+            {
+              $group: {
+                _id: null,
+                totalTasks: { $sum: 1 },
+
+                pendingTasks: {
+                  $sum: {
+                    $cond: [{ $eq: ["$mentees.status", "assigned"] }, 1, 0],
+                  },
+                },
+
+                submittedTasks: {
+                  $sum: {
+                    $cond: [{ $eq: ["$mentees.status", "submitted"] }, 1, 0],
+                  },
+                },
+
+                overdueTasks: {
+                  $sum: {
+                    $cond: [{ $eq: ["$mentees.status", "overdue"] }, 1, 0],
+                  },
+                },
+              },
+            },
+          ],
+          as: "taskStats",
+        },
+      },
+
+      /* ------------------------------------
+         Flatten lookup results
+      ------------------------------------- */
+      {
+        $addFields: {
+          totalTasks: {
+            $ifNull: [{ $first: "$taskStats.totalTasks" }, 0],
+          },
+          pendingTasks: {
+            $ifNull: [{ $first: "$taskStats.pendingTasks" }, 0],
+          },
+          submittedTasks: {
+            $ifNull: [{ $first: "$taskStats.submittedTasks" }, 0],
+          },
+          overdueTasks: {
+            $ifNull: [{ $first: "$taskStats.overdueTasks" }, 0],
+          },
+        },
+      },
+
+      {
+        $addFields: {
+          totalSessions: {
+            $ifNull: [{ $first: "$sessionStats.totalSessions" }, 0],
+          },
+        },
+      },
+
+      /* ------------------------------------
+         Compute averages
+      ------------------------------------- */
+      {
+        $addFields: {
+          avrAttendance: {
+            $cond: [
+              { $gt: ["$totalSessions", 0] },
+              { $divide: ["$totalAttendance", "$totalSessions"] },
+              0,
+            ],
+          },
+        },
+      },
+
+      {
+        $addFields: {
+          missedAttendance: {
+            $max: [
+              {
+                $subtract: ["$totalSessions", "$totalAttendance"],
+              },
+              0,
+            ],
+          },
+        },
+      },
+
+      /* ------------------------------------
+         Only return what you need
+      ------------------------------------- */
+      {
+        $project: {
+          firstName: 1,
+          lastName: 1,
+          email: 1,
+          course: 1,
+          profilePhoto: 1,
+          about: 1,
+          totalAttendance: 1,
+          aveGrade: 1,
+          avrAttendance: 1,
+          missedAttendance: 1,
+          totalTasks: 1,
+          pendingTasks: 1,
+          submittedTasks: 1,
+          overdueTasks: 1,
+        },
+      },
+    ]);
+
+    if (!mentees.length) {
       return res.status(404).json({
         status: "error",
         message: "No mentees found for this mentor",
       });
     }
 
-    const menteesCount = await User.countDocuments({ course: mentorCourse });
-
     return res.status(200).json({
       status: "success",
       data: {
-        menteesCount,
+        menteesCount: mentees.length,
         mentees,
       },
     });
@@ -1023,10 +1176,12 @@ export const gradeSubmission = async (req: Request, res: Response) => {
       {
         grade: gradeScore,
         mentorFeedback: feedback,
+        status: "graded",
         gradeDate: new Date(),
       },
       { new: true },
     );
+
     if (!submission) {
       return res.status(404).json({
         status: "error",
@@ -1034,9 +1189,35 @@ export const gradeSubmission = async (req: Request, res: Response) => {
       });
     }
 
+    const result = await Submission.aggregate([
+      {
+        $match: {
+          mentee: submission.mentee,
+          status: "graded",
+          grade: { $ne: null },
+        },
+      },
+      {
+        $group: {
+          _id: "$mentee",
+          avgGrade: { $avg: "$grade" },
+        },
+      },
+    ]);
+
+    const avgGrade =
+      result.length > 0 ? Number(result[0].avgGrade.toFixed(2)) : null;
+
+    if (avgGrade !== null) {
+      await User.findByIdAndUpdate(submission.mentee, {
+        aveGrade: avgGrade,
+      });
+    }
+
     return res.status(200).json({
       status: "success",
       data: submission,
+      aveGrade: avgGrade,
     });
   } catch (error: any) {
     console.log("Error grading submission:", error);

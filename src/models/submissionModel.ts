@@ -44,6 +44,11 @@ const submissionSchema = new Schema(
         _id: false,
       },
     ],
+    status: {
+      type: String,
+      enum: ["graded", "not graded"],
+      default: "not graded",
+    },
     grade: {
       type: Number,
     },

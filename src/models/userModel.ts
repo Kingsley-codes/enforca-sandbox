@@ -51,15 +51,7 @@ const userSchema = new Schema(
       type: Number,
       default: 0,
     },
-    missed: {
-      type: Number,
-      default: 0,
-    },
     aveGrade: {
-      type: Number,
-      default: 0,
-    },
-    progress: {
       type: Number,
       default: 0,
     },
@@ -83,6 +75,9 @@ const userSchema = new Schema(
     unusedCoins: {
       type: Number,
       default: 2500,
+    },
+    about: {
+      type: String,
     },
     totalCoinsSpent: {
       type: Number,
