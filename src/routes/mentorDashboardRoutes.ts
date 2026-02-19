@@ -14,7 +14,7 @@ import {
   addRecordingLink,
   gradeSubmission,
   getAllSubmissions,
-  fetchMentorProjects,
+  fetchMenteeProjects,
   fetchMenteeAssignments,
   fetchMenteesList,
 } from "../controllers/mentorDashboardController.js";
@@ -51,7 +51,7 @@ mentorDashboardRouter.post(
 );
 
 mentorDashboardRouter.patch(
-  "/sessions/:id",
+  "/sessions/:sessionId",
   mentorAuthenticate,
   requireRole("mentor"),
   uploadFileattachments,
@@ -60,21 +60,21 @@ mentorDashboardRouter.patch(
 );
 
 mentorDashboardRouter.patch(
-  "/sessions/:id/reschedule",
+  "/sessions/:sessionId/reschedule",
   mentorAuthenticate,
   requireRole("mentor"),
   rescheduleSession,
 );
 
 mentorDashboardRouter.patch(
-  "/sessions/:id/recording",
+  "/sessions/:sessionId/recording",
   mentorAuthenticate,
   requireRole("mentor"),
   addRecordingLink,
 );
 
 mentorDashboardRouter.delete(
-  "/sessions/:id",
+  "/sessions/:sessionId",
   mentorAuthenticate,
   requireRole("mentor"),
   deleteSession,
@@ -97,7 +97,7 @@ mentorDashboardRouter.post(
 );
 
 mentorDashboardRouter.patch(
-  "/assignments/:id",
+  "/assignments/:assignmentId",
   mentorAuthenticate,
   requireRole("mentor"),
   uploadResource,
@@ -106,7 +106,7 @@ mentorDashboardRouter.patch(
 );
 
 mentorDashboardRouter.delete(
-  "/assignments/:id",
+  "/assignments/:assignmentId",
   mentorAuthenticate,
   requireRole("mentor"),
   mentorAuthenticate,
@@ -122,7 +122,7 @@ mentorDashboardRouter.get(
 );
 
 mentorDashboardRouter.patch(
-  "/submissions/:id",
+  "/submissions/:submissionId",
   mentorAuthenticate,
   requireRole("mentor"),
   mentorAuthenticate,
@@ -130,15 +130,15 @@ mentorDashboardRouter.patch(
 );
 
 mentorDashboardRouter.get(
-  "/mentees/user-projects/:id",
+  "/mentee-projects/:id",
   mentorAuthenticate,
   requireRole("mentor"),
   mentorAuthenticate,
-  fetchMentorProjects,
+  fetchMenteeProjects,
 );
 
 mentorDashboardRouter.get(
-  "/mentees/user-tasks/:id",
+  "/mentee-tasks/:id",
   mentorAuthenticate,
   requireRole("mentor"),
   fetchMenteeAssignments,

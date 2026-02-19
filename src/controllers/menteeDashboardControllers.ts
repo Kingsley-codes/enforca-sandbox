@@ -199,7 +199,7 @@ export const fetchMySessions = async (req: Request, res: Response) => {
 export const joinSession = async (req: Request, res: Response) => {
   try {
     const menteeId = req.user;
-    const { id: sessionId } = req.params;
+    const { sessionId } = req.params;
 
     if (!menteeId) {
       return res.status(401).json({
@@ -250,9 +250,12 @@ export const joinSession = async (req: Request, res: Response) => {
     );
 
     if (alreadyAttended) {
-      return res.status(400).json({
-        status: "error",
-        message: "Session already joined",
+      return res.status(200).json({
+        status: "success",
+        data: {
+          meetinLink,
+          unusedcoins: mentee.unusedCoins,
+        },
       });
     }
 
@@ -294,7 +297,7 @@ export const joinSession = async (req: Request, res: Response) => {
 export const getSessionRecording = async (req: Request, res: Response) => {
   try {
     const menteeId = req.user;
-    const { id: sessionId } = req.params;
+    const { sessionId } = req.params;
 
     if (!menteeId) {
       return res.status(401).json({
@@ -472,7 +475,7 @@ export const makeSubmission = async (req: Request, res: Response) => {
 
     // Create discussion for the submission
     const newDiscussion = await Discussion.create({
-      assignment: assignmentId,
+      submission: newSubmission._id,
       mentee: menteeId,
       mentor: assignment.mentor,
     });
@@ -522,7 +525,7 @@ export const getSubmission = async (req: Request, res: Response) => {
       });
     }
 
-    const { id: assignmentId } = req.params;
+    const { assignmentId } = req.params;
 
     const submission = await Submission.findOne({
       assignment: assignmentId,

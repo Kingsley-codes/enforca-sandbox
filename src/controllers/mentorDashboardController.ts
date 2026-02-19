@@ -357,7 +357,7 @@ export const createSession = async (req: Request, res: Response) => {
 export const editSession = async (req: Request, res: Response) => {
   try {
     const mentor = req.mentor;
-    const { id: sessionId } = req.params;
+    const { sessionId } = req.params;
 
     if (!mentor) {
       return res.status(401).json({
@@ -581,7 +581,7 @@ export const editSession = async (req: Request, res: Response) => {
 export const deleteSession = async (req: Request, res: Response) => {
   try {
     const mentorId = req.mentor;
-    const { id: sessionId } = req.params;
+    const { sessionId } = req.params;
 
     if (!mentorId) {
       return res.status(401).json({
@@ -627,7 +627,7 @@ export const deleteSession = async (req: Request, res: Response) => {
 export const rescheduleSession = async (req: Request, res: Response) => {
   try {
     const mentor = req.mentor;
-    const { id: sessionId } = req.params;
+    const { sessionId } = req.params;
 
     if (!mentor) {
       return res.status(401).json({
@@ -672,7 +672,7 @@ export const rescheduleSession = async (req: Request, res: Response) => {
 export const addRecordingLink = async (req: Request, res: Response) => {
   try {
     const mentor = req.mentor;
-    const { id: sessionId } = req.params;
+    const { sessionId } = req.params;
 
     if (!mentor) {
       return res.status(401).json({
@@ -979,7 +979,7 @@ export const createAssignment = async (req: Request, res: Response) => {
 export const editAssignment = async (req: Request, res: Response) => {
   try {
     const mentorId = req.mentor;
-    const { id: assignmentId } = req.params;
+    const { assignmentId } = req.params;
 
     if (!mentorId) {
       return res.status(400).json({
@@ -1150,7 +1150,7 @@ export const editAssignment = async (req: Request, res: Response) => {
 export const deleteAssignment = async (req: Request, res: Response) => {
   try {
     const mentorId = req.mentor;
-    const { id: assignmentId } = req.params;
+    const { assignmentId } = req.params;
 
     if (!mentorId) {
       return res.status(401).json({
@@ -1242,7 +1242,7 @@ export const gradeSubmission = async (req: Request, res: Response) => {
       });
     }
 
-    const { id: submissionId } = req.params;
+    const { submissionId } = req.params;
 
     const { gradeScore, feedback } = req.body;
 
@@ -1413,8 +1413,7 @@ export const fetchMenteeAssignments = async (req: Request, res: Response) => {
             {
               $project: {
                 grade: 1,
-                gradeDate: 1,
-                mentorFeedback: 1,
+                createdAt: 1,
                 _id: 0,
               },
             },
@@ -1436,7 +1435,12 @@ export const fetchMenteeAssignments = async (req: Request, res: Response) => {
 
       {
         $project: {
-          mentor: 0,
+          title: 1,
+          dueDate: 1,
+          week: 1,
+          submittedDate: "$submission.createdAt",
+          status: { $arrayElemAt: ["$mentees.status", 0] },
+          grade: "$submission.grade",
         },
       },
     ]);
@@ -1457,7 +1461,7 @@ export const fetchMenteeAssignments = async (req: Request, res: Response) => {
   }
 };
 
-export const fetchMentorProjects = async (req: Request, res: Response) => {
+export const fetchMenteeProjects = async (req: Request, res: Response) => {
   try {
     const mentor = req.mentor;
 
@@ -1523,8 +1527,7 @@ export const fetchMentorProjects = async (req: Request, res: Response) => {
             {
               $project: {
                 grade: 1,
-                gradeDate: 1,
-                mentorFeedback: 1,
+                createdAt: 1, // <-- needed for submittedDate
                 _id: 0,
               },
             },
@@ -1546,7 +1549,11 @@ export const fetchMentorProjects = async (req: Request, res: Response) => {
 
       {
         $project: {
-          mentor: 0,
+          title: 1,
+          dueDate: 1,
+          submittedDate: "$submission.createdAt",
+          status: { $arrayElemAt: ["$mentees.status", 0] },
+          grade: "$submission.grade",
         },
       },
     ]);

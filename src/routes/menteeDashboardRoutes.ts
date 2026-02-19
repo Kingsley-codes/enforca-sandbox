@@ -26,7 +26,7 @@ menteeDashboardRouter.get(
 );
 
 menteeDashboardRouter.get(
-  "/assignments/submission/:id",
+  "/assignments/submission/:assignmentId",
   userAuthenticate,
   getSubmission,
 );
@@ -40,10 +40,14 @@ menteeDashboardRouter.post(
 
 menteeDashboardRouter.get("/sessions", userAuthenticate, fetchMySessions);
 
-menteeDashboardRouter.get("/sessions/:id", userAuthenticate, joinSession);
+menteeDashboardRouter.get(
+  "/sessions/:sessionId",
+  userAuthenticate,
+  joinSession,
+);
 
 menteeDashboardRouter.get(
-  "/sessions/:id/recording",
+  "/sessions/:sessionId/recording",
   userAuthenticate,
   getSessionRecording,
 );
