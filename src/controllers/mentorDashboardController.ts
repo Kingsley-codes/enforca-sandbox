@@ -1280,7 +1280,7 @@ export const gradeSubmission = async (req: Request, res: Response) => {
       },
       {
         $set: {
-          "mentees.$.status": "submitted",
+          "mentees.$.status": "graded",
         },
       },
     );
