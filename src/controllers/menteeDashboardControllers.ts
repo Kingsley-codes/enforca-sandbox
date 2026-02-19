@@ -3,7 +3,11 @@ import Session from "../models/sessionModel.js";
 import Assignment from "../models/assignmentModel.js";
 import { DateFilterType, getDateRange } from "../helpers/filter.js";
 import Submission from "../models/submissionModel.js";
-import { uploadToCloudinary } from "../middleware/uploadMiddleware.js";
+import {
+  deleteFromCloudinary,
+  uploadImageToCloudinary,
+  uploadToCloudinary,
+} from "../middleware/uploadMiddleware.js";
 import User from "../models/userModel.js";
 import { parseFormArray } from "../helpers/parseFormArray.js";
 import Discussion from "../models/discussionsModel.js";
@@ -546,6 +550,70 @@ export const getSubmission = async (req: Request, res: Response) => {
   } catch (error: any) {
     console.log("Error fetching submission:", error);
 
+    return res.status(500).json({
+      status: "error",
+      message: error.message,
+    });
+  }
+};
+
+export const editMenteeProfile = async (req: Request, res: Response) => {
+  try {
+    const menteeId = req.user;
+
+    if (!menteeId) {
+      return res.status(401).json({
+        status: "error",
+        message: "Unauthorized. Mentee not authenticated",
+      });
+    }
+
+    const { firstName, lastName, phoneNumber, address, gender } = req.body;
+
+    const mentee = await User.findById(menteeId).select("-password -sessions");
+
+    if (!mentee) {
+      return res.status(404).json({
+        status: "error",
+        message: "Mentor not found",
+      });
+    }
+
+    const file = (req.files as { profilePhoto?: Express.Multer.File[] })
+      ?.profilePhoto?.[0];
+
+    if (file) {
+      const uploaded = await uploadImageToCloudinary(
+        file.buffer,
+        "Enforca Sandbox/Profile Photos",
+      );
+
+      if (mentee.profilePhoto?.publicId) {
+        await deleteFromCloudinary(mentee.profilePhoto.publicId);
+      }
+
+      // save new image info
+      mentee.profilePhoto = {
+        publicId: uploaded.public_id,
+        url: uploaded.secure_url,
+      };
+    }
+
+    if (firstName) mentee.firstName = firstName;
+    if (lastName) mentee.lastName = lastName;
+    if (phoneNumber) mentee.phoneNumber = phoneNumber;
+    if (address) mentee.address = address;
+    if (gender) mentee.gender = gender;
+
+    await mentee.save();
+
+    return res.status(200).json({
+      status: "success",
+      message: "Profile updated successfully",
+      data: mentee,
+    });
+  } catch (error: any) {
+    console.log("Error editing mentee profile:", error);
     return res.status(500).json({
       status: "error",
       message: error.message,

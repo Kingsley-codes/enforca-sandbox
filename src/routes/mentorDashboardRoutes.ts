@@ -17,10 +17,12 @@ import {
   fetchMenteeProjects,
   fetchMenteeAssignments,
   fetchMenteesList,
+  editMentorProfile,
 } from "../controllers/mentorDashboardController.js";
 import {
   handleUploadErrors,
   uploadFileattachments,
+  uploadProfilePhoto,
   uploadResource,
 } from "../middleware/uploadMiddleware.js";
 import { requireRole } from "../middleware/authorizationMiddleware.js";
@@ -149,6 +151,13 @@ mentorDashboardRouter.get(
   mentorAuthenticate,
   requireRole("mentor"),
   fetchMenteesList,
+);
+
+mentorDashboardRouter.patch(
+  "/profile",
+  mentorAuthenticate,
+  uploadProfilePhoto,
+  editMentorProfile,
 );
 
 export default mentorDashboardRouter;

@@ -97,9 +97,6 @@ const userSchema = new Schema(
       type: Number,
       default: 2500,
     },
-    about: {
-      type: String,
-    },
     totalCoinsSpent: {
       type: Number,
       default: 0,

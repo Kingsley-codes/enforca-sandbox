@@ -155,6 +155,27 @@ export const uploadToCloudinary = (
   });
 };
 
+export const uploadImageToCloudinary = (
+  fileBuffer: Buffer,
+  folder: string,
+): Promise<CloudinaryUploadResult> => {
+  return new Promise((resolve, reject) => {
+    const uploadStream = cloudinary.uploader.upload_stream(
+      { folder },
+      (error, result) => {
+        if (error) return reject(error);
+
+        if (!result) {
+          return reject(new Error("Cloudinary upload failed: no result"));
+        }
+        resolve(result);
+      },
+    );
+
+    streamifier.createReadStream(fileBuffer).pipe(uploadStream);
+  });
+};
+
 export const deleteFromCloudinary = (publicId: string) => {
   return new Promise((resolve, reject) => {
     cloudinary.uploader.destroy(publicId, (error, result) => {

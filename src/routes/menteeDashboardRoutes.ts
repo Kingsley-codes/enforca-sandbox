@@ -1,6 +1,7 @@
 import express from "express";
 import { userAuthenticate } from "../middleware/authenticationMiddleware.js";
 import {
+  editMenteeProfile,
   fetchMyAssignments,
   fetchMyProjects,
   fetchMySessions,
@@ -9,7 +10,10 @@ import {
   joinSession,
   makeSubmission,
 } from "../controllers/menteeDashboardControllers.js";
-import { uploadSubmissionFiles } from "../middleware/uploadMiddleware.js";
+import {
+  uploadProfilePhoto,
+  uploadSubmissionFiles,
+} from "../middleware/uploadMiddleware.js";
 
 const menteeDashboardRouter = express.Router();
 
@@ -50,6 +54,13 @@ menteeDashboardRouter.get(
   "/sessions/:sessionId/recording",
   userAuthenticate,
   getSessionRecording,
+);
+
+menteeDashboardRouter.patch(
+  "/profile",
+  userAuthenticate,
+  uploadProfilePhoto,
+  editMenteeProfile,
 );
 
 export default menteeDashboardRouter;

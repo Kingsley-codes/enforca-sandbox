@@ -51,10 +51,6 @@ const mentorSchema = new Schema(
       publicId: { type: String },
       url: { type: String },
     },
-    gender: {
-      type: String,
-      enum: ["male", "female"],
-    },
   },
   { timestamps: true },
 );

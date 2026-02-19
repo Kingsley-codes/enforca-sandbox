@@ -6,6 +6,7 @@ import Assignment from "../models/assignmentModel.js";
 import { DateFilterType, getDateRange } from "../helpers/filter.js";
 import {
   deleteFromCloudinary,
+  uploadImageToCloudinary,
   uploadToCloudinary,
 } from "../middleware/uploadMiddleware.js";
 import { Types } from "mongoose";
@@ -189,6 +190,7 @@ export const fetchMentees = async (req: Request, res: Response) => {
           pendingTasks: 1,
           submittedTasks: 1,
           overdueTasks: 1,
+          sessions: 1,
         },
       },
     ]);
@@ -1601,6 +1603,68 @@ export const fetchMenteesList = async (req: Request, res: Response) => {
       },
     });
   } catch (error: any) {
+    console.log("Error fetching mentee lists:", error);
+    return res.status(500).json({
+      status: "error",
+      message: error.message,
+    });
+  }
+};
+
+export const editMentorProfile = async (req: Request, res: Response) => {
+  try {
+    const mentorId = req.mentor;
+    if (!mentorId) {
+      return res.status(401).json({
+        status: "error",
+        message: "Unauthorized. Mentor not authenticated",
+      });
+    }
+
+    const { firstName, lastName, phoneNumber, address, gender } = req.body;
+
+    const mentor = await Mentor.findById(mentorId).select("-password");
+
+    if (!mentor) {
+      return res.status(404).json({
+        status: "error",
+        message: "Mentor not found",
+      });
+    }
+
+    const file = (req.files as { profilePhoto?: Express.Multer.File[] })
+      ?.profilePhoto?.[0];
+
+    if (file) {
+      const uploaded = await uploadImageToCloudinary(
+        file.buffer,
+        "Enforca Sandbox/Profile Photos",
+      );
+
+      if (mentor.profilePhoto?.publicId) {
+        await deleteFromCloudinary(mentor.profilePhoto.publicId);
+      }
+
+      // save new image info
+      mentor.profilePhoto = {
+        publicId: uploaded.public_id,
+        url: uploaded.secure_url,
+      };
+    }
+
+    if (firstName) mentor.firstName = firstName;
+    if (lastName) mentor.lastName = lastName;
+    if (phoneNumber) mentor.phoneNumber = phoneNumber;
+
+    await mentor.save();
+
+    return res.status(200).json({
+      status: "success",
+      message: "Profile updated successfully",
+      data: mentor,
+    });
+  } catch (error: any) {
+    console.log("Error editing mentor profile:", error);
     return res.status(500).json({
       status: "error",
       message: error.message,
