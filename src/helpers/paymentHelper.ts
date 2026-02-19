@@ -67,7 +67,7 @@ export const handleChargeSuccess = async (eventData: PaystackEventData) => {
     let paymentType = payment.paymentType;
 
     if ((paymentType = "coins")) {
-      mentee.unusedCoins += 5000;
+      mentee.unusedCoins = mentee.unusedCoins + payment.amount;
       await mentee.save();
     } else {
       mentee.isPremium = true;

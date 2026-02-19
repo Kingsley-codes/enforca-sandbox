@@ -178,7 +178,7 @@ export const verifyPayment = async (req: Request, res: Response) => {
       let paymentType = payment.paymentType;
 
       if ((paymentType = "coins")) {
-        mentee.unusedCoins += 5000;
+        mentee.unusedCoins = mentee.unusedCoins + payment.amount;
         await mentee.save();
       } else {
         mentee.isPremium = true;
