@@ -154,7 +154,7 @@ mentorDashboardRouter.get(
 );
 
 mentorDashboardRouter.patch(
-  "/profile",
+  "/edit-profile",
   mentorAuthenticate,
   uploadProfilePhoto,
   editMentorProfile,

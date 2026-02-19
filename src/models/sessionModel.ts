@@ -44,6 +44,11 @@ const sessionSchema = new Schema(
       type: String,
       required: true,
     },
+    status: {
+      type: String,
+      enum: ["pending", "done"],
+      default: "pending",
+    },
     objectives: [
       {
         type: String,

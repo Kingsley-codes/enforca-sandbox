@@ -57,7 +57,7 @@ menteeDashboardRouter.get(
 );
 
 menteeDashboardRouter.patch(
-  "/profile",
+  "/edit-profile",
   userAuthenticate,
   uploadProfilePhoto,
   editMenteeProfile,

@@ -50,7 +50,12 @@ export const fetchMentees = async (req: Request, res: Response) => {
           pipeline: [
             {
               $match: {
-                $expr: { $in: ["$$menteeId", "$attendees"] },
+                $expr: {
+                  $and: [
+                    { $in: ["$$menteeId", "$attendees"] },
+                    { $eq: ["$status", "done"] },
+                  ],
+                },
               },
             },
             {
@@ -1621,7 +1626,7 @@ export const editMentorProfile = async (req: Request, res: Response) => {
       });
     }
 
-    const { firstName, lastName, phoneNumber, address, gender } = req.body;
+    const { firstName, lastName, phoneNumber } = req.body;
 
     const mentor = await Mentor.findById(mentorId).select("-password");
 
