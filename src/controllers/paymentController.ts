@@ -177,36 +177,26 @@ export const verifyPayment = async (req: Request, res: Response) => {
 
       let paymentType = payment.paymentType;
 
-      if ((paymentType = "coins")) {
+      if (paymentType === "coins") {
         switch (payment.amount) {
           case 5000:
             mentee.unusedCoins = mentee.unusedCoins + 5000;
-            console.log("payment amount:", payment.amount);
-            console.log("mentee unused coins:", mentee.unusedCoins);
             break;
 
           case 10000:
             mentee.unusedCoins = mentee.unusedCoins + 12000;
-            console.log("payment amount:", payment.amount);
-            console.log("mentee unused coins:", mentee.unusedCoins);
             break;
 
           case 15000:
             mentee.unusedCoins = mentee.unusedCoins + 20000;
-            console.log("payment amount:", payment.amount);
-            console.log("mentee unused coins:", mentee.unusedCoins);
             break;
 
           case 35000:
             mentee.unusedCoins = mentee.unusedCoins + 50000;
-            console.log("payment amount:", payment.amount);
-            console.log("mentee unused coins:", mentee.unusedCoins);
             break;
 
           case 60000:
             mentee.unusedCoins = mentee.unusedCoins + 100000;
-            console.log("payment amount:", payment.amount);
-            console.log("mentee unused coins:", mentee.unusedCoins);
             break;
 
           default:
@@ -215,6 +205,7 @@ export const verifyPayment = async (req: Request, res: Response) => {
 
         await mentee.save();
       } else {
+        console.log("Payment type is:", paymentType);
         mentee.isPremium = true;
         await mentee.save();
       }
