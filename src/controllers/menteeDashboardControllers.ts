@@ -11,6 +11,7 @@ import {
 import User from "../models/userModel.js";
 import { parseFormArray } from "../helpers/parseFormArray.js";
 import Discussion from "../models/discussionsModel.js";
+import mongoose from "mongoose";
 
 export const fetchMyAssignments = async (req: Request, res: Response) => {
   try {
@@ -249,43 +250,61 @@ export const joinSession = async (req: Request, res: Response) => {
       });
     }
 
-    const alreadyAttended = mentee.sessions?.some(
-      (s) => s.session.toString() === sessionId && s.attended === true,
-    );
-
-    if (alreadyAttended) {
-      return res.status(200).json({
-        status: "success",
-        data: {
-          meetinLink,
-          unusedcoins: mentee.unusedCoins,
-        },
-      });
-    }
-
     // ✅ mark this session as attended for this user
-    await User.updateOne(
+    const updatedMentee = await User.findOneAndUpdate(
       {
         _id: menteeId,
-        "sessions.session": session._id,
+        unusedCoins: { $gte: 500 },
+        sessions: {
+          $elemMatch: {
+            session: session._id,
+            attended: false,
+          },
+        },
       },
       {
         $set: {
           "sessions.$.attended": true,
         },
+        $inc: {
+          unusedCoins: -500,
+          totalCoinsSpent: 500,
+          totalAttendance: 1,
+        },
       },
+      { new: true },
     );
 
-    mentee.unusedCoins -= 500;
-    mentee.totalCoinsSpent += 500;
-    mentee.totalAttendance += 1;
-    await mentee.save();
+    if (!updatedMentee) {
+      const freshMentee = await User.findById(menteeId).select(
+        "sessions unusedCoins",
+      );
+
+      const alreadyAttendedNow = freshMentee?.sessions?.some(
+        (s) => s.session.toString() === sessionId && s.attended === true,
+      );
+
+      if (alreadyAttendedNow) {
+        return res.status(200).json({
+          status: "success",
+          data: {
+            meetinLink,
+            unusedcoins: freshMentee!.unusedCoins,
+          },
+        });
+      }
+
+      return res.status(400).json({
+        status: "error",
+        message: "Not enough coins",
+      });
+    }
 
     return res.status(200).json({
       status: "success",
       data: {
         meetinLink,
-        unusedcoins: mentee.unusedCoins,
+        unusedcoins: updatedMentee.unusedCoins,
       },
     });
   } catch (error: any) {
@@ -319,26 +338,19 @@ export const getSessionRecording = async (req: Request, res: Response) => {
       });
     }
 
-    if (mentee.unusedCoins < 500) {
-      return res.status(400).json({
-        status: "error",
-        message: "Not enough coins",
-      });
-    }
-
-    const session = await Session.findOne({
+    const recordedSession = await Session.findOne({
       _id: sessionId,
       attendees: menteeId,
     });
 
-    if (!session) {
+    if (!recordedSession) {
       return res.status(404).json({
         status: "error",
         message: "Session not found",
       });
     }
 
-    const sessionRecording = session.recordingLink;
+    const sessionRecording = recordedSession.recordingLink;
 
     if (!sessionRecording) {
       return res.status(404).json({
@@ -347,15 +359,35 @@ export const getSessionRecording = async (req: Request, res: Response) => {
       });
     }
 
-    mentee.unusedCoins -= 500;
-    mentee.totalCoinsSpent += 500;
-    await mentee.save();
+    // Atomic coin deduction
+    const updatedMentee = await User.findOneAndUpdate(
+      {
+        _id: menteeId,
+        unusedCoins: { $gte: 500 },
+      },
+      {
+        $inc: {
+          unusedCoins: -500,
+          totalCoinsSpent: 500,
+        },
+      },
+      {
+        new: true,
+      },
+    );
+
+    if (!updatedMentee) {
+      return res.status(400).json({
+        status: "error",
+        message: "Not enough coins",
+      });
+    }
 
     return res.status(200).json({
       status: "success",
       data: {
         sessionRecording,
-        unusedcoins: mentee.unusedCoins,
+        unusedcoins: updatedMentee.unusedCoins,
       },
     });
   } catch (error: any) {
@@ -369,6 +401,8 @@ export const getSessionRecording = async (req: Request, res: Response) => {
 };
 
 export const makeSubmission = async (req: Request, res: Response) => {
+  const session = await mongoose.startSession();
+
   try {
     const menteeId = req.user;
 
@@ -388,19 +422,13 @@ export const makeSubmission = async (req: Request, res: Response) => {
       });
     }
 
+    // Only used to confirm user exists (not for coins anymore)
     const mentee = await User.findById(menteeId);
 
     if (!mentee) {
       return res.status(404).json({
         status: "error",
         message: "Mentee not found",
-      });
-    }
-
-    if (mentee.unusedCoins < 500) {
-      return res.status(400).json({
-        status: "error",
-        message: "Not enough coins",
       });
     }
 
@@ -466,23 +494,39 @@ export const makeSubmission = async (req: Request, res: Response) => {
       uploadedResources = await Promise.all(uploads);
     }
 
-    const newSubmission = await Submission.create({
-      assignment: assignmentId,
-      mentee: menteeId,
-      mentor: assignment.mentor,
-      title: assignment.title,
-      submissionNotes: submissionNotes,
-      submissionDate: new Date(),
-      submittedFiles: uploadedResources,
-      submittedLinks: linkResources,
-    });
+    // TRANSACTION START
+    session.startTransaction();
+
+    // Create new submission
+    const createdSubmissions = await Submission.create(
+      [
+        {
+          assignment: assignmentId,
+          mentee: menteeId,
+          mentor: assignment.mentor,
+          title: assignment.title,
+          submissionNotes,
+          submissionDate: new Date(),
+          submittedFiles: uploadedResources,
+          submittedLinks: linkResources,
+        },
+      ],
+      { session },
+    );
+
+    const newSubmission = createdSubmissions[0]!;
 
     // Create discussion for the submission
-    const newDiscussion = await Discussion.create({
-      submission: newSubmission._id,
-      mentee: menteeId,
-      mentor: assignment.mentor,
-    });
+    await Discussion.create(
+      [
+        {
+          submission: newSubmission._id,
+          mentee: menteeId,
+          mentor: assignment.mentor,
+        },
+      ],
+      { session },
+    );
 
     await Assignment.updateOne(
       {
@@ -494,20 +538,52 @@ export const makeSubmission = async (req: Request, res: Response) => {
           "mentees.$.status": "submitted",
         },
       },
+      { session },
     );
 
-    mentee.unusedCoins -= 500;
-    mentee.totalCoinsSpent += 500;
-    await mentee.save();
+    // Atomic coin deduction
+    const updatedMentee = await User.findOneAndUpdate(
+      {
+        _id: menteeId,
+        unusedCoins: { $gte: 500 },
+      },
+      {
+        $inc: {
+          unusedCoins: -500,
+          totalCoinsSpent: 500,
+        },
+      },
+      {
+        new: true,
+        session,
+      },
+    );
+
+    if (!updatedMentee) {
+      throw new Error("INSUFFICIENT_COINS");
+    }
+
+    await session.commitTransaction();
+    session.endSession();
 
     return res.status(201).json({
       status: "success",
       data: {
         newSubmission,
-        unusedcoins: mentee.unusedCoins,
+        unusedcoins: updatedMentee.unusedCoins,
       },
     });
   } catch (error: any) {
+    await session.abortTransaction();
+    session.endSession();
+
+    if (error?.message === "INSUFFICIENT_COINS") {
+      return res.status(400).json({
+        status: "error",
+        message: "Not enough coins",
+      });
+    }
+
     console.error("Create submission error:", error);
 
     return res.status(500).json({
