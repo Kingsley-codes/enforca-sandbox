@@ -1,7 +1,8 @@
 import crypto from "crypto";
-import Payment from "../models/paymentModel.js";
+import Payment, { PaymentDocument } from "../models/paymentModel.js";
 import { PaystackEventData } from "../interface/allInterfaces.js";
 import User from "../models/userModel.js";
+import mongoose from "mongoose";
 
 // Helper function to generate unique donation IDs
 export const generatePaymentID = () =>
@@ -36,75 +37,80 @@ export function buildverifyHash(
   return hash;
 }
 
-export const handleChargeSuccess = async (eventData: PaystackEventData) => {
-  let payment = null;
+export const handleChargeSuccess = async (
+  eventData: PaystackEventData,
+): Promise<PaymentDocument | null> => {
+  const session = await mongoose.startSession();
 
   try {
-    payment = await Payment.findOne({
-      transactionRef: eventData.invoiceRequestReference,
-    });
-
-    if (!payment) {
-      console.log(
-        "Payent not found for this transaction reference:",
-        eventData.invoiceRequestReference,
+    const result = await session.withTransaction(async () => {
+      // ✅ only one worker can move this payment to Completed
+      const payment = await Payment.findOneAndUpdate(
+        {
+          transactionRef: eventData.invoiceRequestReference,
+          paymentStatus: "Pending",
+        },
+        {
+          $set: {
+            paymentStatus: "Completed",
+            date: new Date(eventData.transactionDate),
+          },
+        },
+        {
+          new: true,
+          session,
+        },
       );
-      throw new Error("Payent not found");
-    }
 
-    payment.date = new Date(eventData.transactionDate);
-    payment.paymentStatus = "Completed";
-    await payment.save();
+      // already processed OR not found
+      if (!payment) return null;
 
-    const mentee = await User.findById(payment.mentee);
+      if (payment.paymentType === "coins") {
+        let coinsToAdd = 0;
 
-    if (!mentee) {
-      console.log("Mentee not found with the userId:", payment.mentee);
+        switch (payment.amount) {
+          case 5000:
+            coinsToAdd = 5000;
+            break;
+          case 10000:
+            coinsToAdd = 12000;
+            break;
+          case 15000:
+            coinsToAdd = 20000;
+            break;
+          case 35000:
+            coinsToAdd = 50000;
+            break;
+          case 60000:
+            coinsToAdd = 100000;
+            break;
+        }
 
-      throw new Error("Mentee not found");
-    }
-
-    let paymentType = payment.paymentType;
-
-    if (paymentType === "coins") {
-      switch (payment.amount) {
-        case 5000:
-          mentee.unusedCoins = mentee.unusedCoins + 5000;
-          break;
-
-        case 10000:
-          mentee.unusedCoins = mentee.unusedCoins + 12000;
-          break;
-
-        case 15000:
-          mentee.unusedCoins = mentee.unusedCoins + 20000;
-          break;
-
-        case 35000:
-          mentee.unusedCoins = mentee.unusedCoins + 50000;
-          break;
-
-        case 60000:
-          mentee.unusedCoins = mentee.unusedCoins + 100000;
-          break;
-
-        default:
-          console.log("unhandled amount type:", payment.amount);
+        if (coinsToAdd > 0) {
+          await User.updateOne(
+            { _id: payment.mentee },
+            { $inc: { unusedCoins: coinsToAdd } },
+            { session },
+          );
+        }
+      } else {
+        await User.updateOne(
+          { _id: payment.mentee },
+          { $set: { isPremium: true } },
+          { session },
+        );
       }
 
-      await mentee.save();
-    } else {
-      mentee.isPremium = true;
-      await mentee.save();
-    }
+      return payment;
+    });
 
-    // Send notification email
-    //     await sendDonationAcknowledgement(donation)
+    return result;
   } catch (error: any) {
     console.error("Error updating successful payment:", error.message);
+    throw error;
+  } finally {
+    session.endSession();
   }
-
-  return payment;
 };
 
 export const handleChargeFailed = async (eventData: PaystackEventData) => {

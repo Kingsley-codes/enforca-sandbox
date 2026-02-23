@@ -1,4 +1,4 @@
-import { Request, response, Response } from "express";
+import { Request, Response } from "express";
 import User from "../models/userModel.js";
 import {
   buildHash,
@@ -12,8 +12,8 @@ import {
   initializeClaneTransaction,
   verifyTransaction,
 } from "../utils/paystackUtils.js";
-import Payment from "../models/paymentModel.js";
-import crypto from "crypto";
+import Payment, { PaymentDocument } from "../models/paymentModel.js";
+import mongoose from "mongoose";
 
 export const initializePayment = async (req: Request, res: Response) => {
   try {
@@ -113,7 +113,6 @@ export const verifyPayment = async (req: Request, res: Response) => {
 
     const hash = buildverifyHash(reference, process.env.CLANE_SECRET_KEY!);
 
-    // Call Paystack Verify API
     const verificationResponse = await verifyTransaction(reference, hash);
 
     if (!verificationResponse.status) {
@@ -126,106 +125,132 @@ export const verifyPayment = async (req: Request, res: Response) => {
 
     const transactionData = verificationResponse.data;
 
-    // Find donation record by transactionRef
-    const payment = await Payment.findOne({ transactionRef: reference });
-
-    if (!payment) {
-      return res.status(404).json({
-        success: false,
-        message: "Payment record not found",
-      });
-    }
-
-    // If failed → mark failed
+    // ---- Handle failed payment from gateway
     if (transactionData.status === "FAILED") {
-      payment.paymentStatus = "Failed";
-      await payment.save();
+      await Payment.updateOne(
+        { transactionRef: reference },
+        { $set: { paymentStatus: "Failed" } },
+      );
 
-      return res.status(404).json({
+      return res.status(400).json({
         success: false,
         message: "Payment failed",
       });
     }
 
-    // ✅ Only proceed if Paystack says it's successful
-    if (transactionData.status === "SUCCESS") {
-      if (payment.paymentStatus === "Completed") {
-        // ✅ Handle second verification attempt gracefully
+    if (transactionData.status !== "SUCCESS") {
+      return res.status(400).json({
+        success: false,
+        message: "Transaction not successful",
+        status: transactionData.status,
+      });
+    }
+
+    const mongoSession = await mongoose.startSession();
+
+    const updatedPayment = await mongoSession.withTransaction(async () => {
+      const payment = await Payment.findOneAndUpdate(
+        {
+          transactionRef: reference,
+          paymentStatus: "Pending",
+        },
+        {
+          $set: {
+            paymentStatus: "Completed",
+            date: new Date(),
+          },
+        },
+        {
+          new: true,
+          session: mongoSession,
+        },
+      );
+
+      if (!payment) return null;
+
+      if (payment.paymentType === "coins") {
+        let coinsToAdd = 0;
+
+        switch (payment.amount) {
+          case 5000:
+            coinsToAdd = 5000;
+            break;
+          case 10000:
+            coinsToAdd = 12000;
+            break;
+          case 15000:
+            coinsToAdd = 20000;
+            break;
+          case 35000:
+            coinsToAdd = 50000;
+            break;
+          case 60000:
+            coinsToAdd = 100000;
+            break;
+        }
+
+        if (coinsToAdd > 0) {
+          await User.updateOne(
+            { _id: payment.mentee },
+            { $inc: { unusedCoins: coinsToAdd } },
+            { session: mongoSession },
+          );
+        }
+      } else {
+        await User.updateOne(
+          { _id: payment.mentee },
+          { $set: { isPremium: true } },
+          { session: mongoSession },
+        );
+      }
+
+      return payment;
+    });
+
+    mongoSession.endSession();
+
+    // ---- Nothing was updated inside the transaction
+    if (!updatedPayment) {
+      const existing = await Payment.findOne({
+        transactionRef: reference,
+      });
+
+      if (!existing) {
+        return res.status(404).json({
+          success: false,
+          message: "Payment record not found",
+        });
+      }
+
+      // ✅ already processed safely
+      if (existing.paymentStatus === "Completed") {
         return res.status(200).json({
           success: true,
           message: "Transaction already verified",
           data: {
-            paymentID: payment.paymentID,
-            menteeEmail: payment.menteeEmail,
-            amount: payment.amount,
-            paymentType: payment.paymentType,
+            paymentID: existing.paymentID,
+            menteeEmail: existing.menteeEmail,
+            amount: existing.amount,
+            paymentType: existing.paymentType,
           },
         });
       }
-      payment.paymentStatus = "Completed";
-      payment.date = new Date();
 
-      await payment.save();
-
-      const mentee = await User.findById(payment.mentee);
-
-      if (!mentee) {
-        console.log("Mentee not found with the userId:", payment.mentee);
-
-        throw new Error("Mentee not found");
-      }
-
-      let paymentType = payment.paymentType;
-
-      if (paymentType === "coins") {
-        switch (payment.amount) {
-          case 5000:
-            mentee.unusedCoins = mentee.unusedCoins + 5000;
-            break;
-
-          case 10000:
-            mentee.unusedCoins = mentee.unusedCoins + 12000;
-            break;
-
-          case 15000:
-            mentee.unusedCoins = mentee.unusedCoins + 20000;
-            break;
-
-          case 35000:
-            mentee.unusedCoins = mentee.unusedCoins + 50000;
-            break;
-
-          case 60000:
-            mentee.unusedCoins = mentee.unusedCoins + 100000;
-            break;
-
-          default:
-            console.log("unhandled amount type:", payment.amount);
-        }
-
-        await mentee.save();
-      } else {
-        console.log("Payment type is:", paymentType);
-        mentee.isPremium = true;
-        await mentee.save();
-      }
-
-      return res.status(200).json({
-        success: true,
-        message: "Transaction verified successfully",
-        data: {
-          paymentID: payment.paymentID,
-          menteeEmail: payment.menteeEmail,
-          amount: payment.amount,
-          paymentType: paymentType,
-        },
+      return res.status(400).json({
+        success: false,
+        message: "Payment is not in a verifiable state",
       });
     }
 
-    return res.status(400).json({
-      success: false,
-      message: "Transaction not successful",
-      status: transactionData.status,
+    return res.status(200).json({
+      success: true,
+      message: "Transaction verified successfully",
+      data: {
+        paymentID: updatedPayment.paymentID,
+        menteeEmail: updatedPayment.menteeEmail,
+        amount: updatedPayment.amount,
+        paymentType: updatedPayment.paymentType,
+      },
     });
   } catch (error: any) {
     console.error("Verify transaction error:", error);

@@ -616,6 +616,13 @@ export const deleteSession = async (req: Request, res: Response) => {
 
     await Promise.allSettled(deletions);
 
+    // ✅ remove this session from every user's sessions array
+    await User.updateMany(
+      { "sessions.session": sessionId },
+      { $pull: { sessions: { session: sessionId } } },
+    );
+
+    // ✅ delete the session document itself
     await session.deleteOne();
 
     return res.status(200).json({
