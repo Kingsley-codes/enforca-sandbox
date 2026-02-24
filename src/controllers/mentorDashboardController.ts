@@ -94,7 +94,11 @@ export const fetchMentees = async (req: Request, res: Response) => {
 
                 submittedTasks: {
                   $sum: {
-                    $cond: [{ $eq: ["$mentees.status", "submitted"] }, 1, 0],
+                    $cond: [
+                      { $in: ["$mentees.status", ["submitted", "graded"]] },
+                      1,
+                      0,
+                    ],
                   },
                 },
 
