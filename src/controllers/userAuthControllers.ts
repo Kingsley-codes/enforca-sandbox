@@ -9,6 +9,7 @@ import {
 } from "../interface/allInterfaces.js";
 import Mentor from "../models/mentorModel.js";
 import { signAccessToken, signRefreshToken } from "../helpers/jwtHelper.js";
+import Admin from "../models/adminModel.js";
 
 // import { sendUserVerificationEmail } from "../utils/emailSender.js";
 // import { UserVerificationCodes } from "../utils/verificationCodes.js";
@@ -540,6 +541,89 @@ export const changeMentorPassword = async (req: Request, res: Response) => {
     return res.status(500).json({
       status: "error",
       message: "Failed to change password",
+      details: err.message,
+    });
+  }
+};
+
+// Mentor Login
+export const adminLogin = async (
+  req: Request<{}, {}, LoginRequestBody>,
+  res: Response,
+) => {
+  try {
+    const { email, password, rememberMe } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({
+        status: "fail",
+        message: "Email and password required",
+      });
+    }
+
+    const admin = await Admin.findOne({ email }).select("+password");
+
+    // Check if user exists and has a password
+    if (!admin || !admin.password) {
+      return res.status(401).json({
+        status: "fail",
+        message: "Invalid credentials",
+      });
+    }
+
+    // Verify both password and user.password are defined before comparing
+    if (!password || !admin.password) {
+      return res.status(401).json({
+        status: "fail",
+        message: "Invalid credentials",
+      });
+    }
+
+    // Compare passwords
+    const isPasswordValid = await bcrypt.compare(password, admin.password);
+
+    if (!isPasswordValid) {
+      return res.status(401).json({
+        status: "fail",
+        message: "Invalid credentials",
+      });
+    }
+
+    admin.password = null;
+
+    // Detect if request is secure (HTTPS)
+    const isSecure = req.secure || req.headers["x-forwarded-proto"] === "https";
+
+    if (rememberMe) {
+      const refreshToken = signRefreshToken(admin._id.toString());
+
+      res.cookie("refresh_token", refreshToken, {
+        httpOnly: true,
+        secure: isSecure,
+        sameSite: "none",
+        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+      });
+    }
+
+    const accessToken = signAccessToken(admin._id.toString());
+
+    res.cookie("access_token", accessToken, {
+      httpOnly: true,
+      secure: isSecure,
+      sameSite: "none",
+      maxAge: 3 * 24 * 60 * 60 * 1000, // 24 hours
+    });
+
+    return res.status(200).json({
+      status: "success",
+      data: { user: admin },
+    });
+  } catch (err: any) {
+    console.error("Admin login error:", err);
+
+    return res.status(500).json({
+      status: "error",
+      message: "Admin login failed due to server error",
       details: err.message,
     });
   }

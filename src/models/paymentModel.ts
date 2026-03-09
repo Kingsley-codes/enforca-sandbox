@@ -21,6 +21,9 @@ const PaymentSchema = new Schema(
       enum: ["coins", "premium"],
       default: "coins",
     },
+    coinsAmount: {
+      type: Number,
+    },
     amount: {
       type: Number,
       required: true,

@@ -1,7 +1,7 @@
 import { Schema, model, InferSchemaType, HydratedDocument } from "mongoose";
 import validator from "validator";
 
-const mentorSchema = new Schema(
+const adminSchema = new Schema(
   {
     firstName: {
       type: String,
@@ -30,29 +30,10 @@ const mentorSchema = new Schema(
         return validator.isMobilePhone(value, "any");
       },
     },
-    course: {
-      type: String,
-      enum: [
-        "frontend",
-        "backend",
-        "product-management",
-        "AI-courses",
-        "quality-assurance",
-        "scrum",
-      ],
-      index: true,
-      required: true,
-    },
     password: {
       type: String,
       minlength: 8,
     },
-    mentees: [
-      {
-        type: Schema.Types.ObjectId,
-        ref: "User",
-      },
-    ],
     profilePhoto: {
       publicId: { type: String },
       url: { type: String },
@@ -61,10 +42,10 @@ const mentorSchema = new Schema(
   { timestamps: true },
 );
 
-export type Mentor = InferSchemaType<typeof mentorSchema>;
+export type Admin = InferSchemaType<typeof adminSchema>;
 
-export type MentorDocument = HydratedDocument<Mentor>;
+export type AdminDocument = HydratedDocument<Admin>;
 
-const Mentor = model<Mentor>("Mentor", mentorSchema);
+const Admin = model<Admin>("Admin", adminSchema);
 
-export default Mentor;
+export default Admin;

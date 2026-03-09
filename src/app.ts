@@ -13,6 +13,7 @@ import paymentRouter from "./routes/paymentRoutes.js";
 import discussionRouter from "./routes/discussionRoutes.js";
 import userRouter from "./routes/userRoutes.js";
 import "./utils/assignmentCron.js";
+import adminDashboardRouter from "./routes/adminDashboardRoutes.js";
 
 // Rate limiting configuration
 const limiter = rateLimit({
@@ -61,6 +62,7 @@ app.use((req, res, next) => {
 app.use("/api/auth", userAuthRouter); // Register auth routes
 app.use("/api/mentor", mentorDashboardRouter); // Register mentor dashboard routes
 app.use("/api/mentee", menteeDashboardRouter); // Register mentor dashboard routes
+app.use("/api/admin", adminDashboardRouter); // Register mentor dashboard routes
 app.use("/api/users", userRouter); // Register mentor dashboard routes
 app.use("/api/discussion", discussionRouter); // Register mentor dashboard routes
 app.use("/api/payment", paymentRouter); // Register mentor dashboard routes

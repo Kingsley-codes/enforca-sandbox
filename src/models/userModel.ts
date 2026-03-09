@@ -63,6 +63,11 @@ const userSchema = new Schema(
       publicId: { type: String },
       url: { type: String },
     },
+    assignedStatus: {
+      type: String,
+      enum: ["assigned", "unassigned"],
+      default: "unassigned",
+    },
     status: {
       type: String,
       enum: ["active", "suspended"],
@@ -102,6 +107,9 @@ const userSchema = new Schema(
       default: 0,
     },
     suspendReason: {
+      type: String,
+    },
+    trainer: {
       type: String,
     },
     address: {

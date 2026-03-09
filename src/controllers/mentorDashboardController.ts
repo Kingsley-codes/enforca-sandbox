@@ -24,7 +24,7 @@ export const fetchMentees = async (req: Request, res: Response) => {
       });
     }
 
-    const mentor = await Mentor.findById(mentorId).select("course");
+    const mentor = await Mentor.findById(mentorId).select("mentees");
 
     if (!mentor) {
       return res.status(404).json({
@@ -33,11 +33,21 @@ export const fetchMentees = async (req: Request, res: Response) => {
       });
     }
 
+    if (!mentor.mentees.length) {
+      return res.status(200).json({
+        status: "success",
+        data: {
+          menteesCount: 0,
+          mentees: [],
+        },
+      });
+    }
+
     const mentees = await User.aggregate([
-      /* Only mentees in this mentor's course */
+      /* Only mentees assigned to this mentor */
       {
         $match: {
-          course: mentor.course,
+          _id: { $in: mentor.mentees },
         },
       },
 
@@ -296,9 +306,9 @@ export const createSession = async (req: Request, res: Response) => {
       fileLinks,
     );
 
-    const mentorCourse = await Mentor.findById(mentor).select("course");
+    const mentorData = await Mentor.findById(mentor).select("course mentees");
 
-    if (!mentorCourse?.course) {
+    if (!mentorData?.course) {
       return res.status(404).json({
         status: "error",
         message: "Mentor course not found",
@@ -310,11 +320,7 @@ export const createSession = async (req: Request, res: Response) => {
     if (attendees) {
       finalMentees = parseFormArray<string>(attendees);
     } else {
-      const allMentees = await User.find({
-        course: mentorCourse.course,
-      }).select("_id");
-
-      finalMentees = allMentees.map((m) => m._id);
+      finalMentees = mentorData.mentees;
     }
 
     const session = await Session.create({
@@ -323,7 +329,7 @@ export const createSession = async (req: Request, res: Response) => {
       date: new Date(date),
       time,
       timezone,
-      course: mentorCourse?.course,
+      course: mentorData?.course,
       meetingLink,
       objectives: finalObjectives,
       attendees: finalMentees,
@@ -468,26 +474,23 @@ export const editSession = async (req: Request, res: Response) => {
     );
 
     // 5. Resolve mentor course + mentees
-    const mentorCourse = await Mentor.findById(mentor).select("course");
+    const mentorData = await Mentor.findById(mentor).select("course mentees");
 
-    if (!mentorCourse?.course) {
-      return res.status(400).json({
+    if (!mentorData?.course) {
+      return res.status(404).json({
         status: "error",
         message: "Mentor course not found",
       });
     }
 
     // 6. Parse mentees
+
     let finalMentees: string[] | Types.ObjectId[] | undefined;
 
-    if (attendees !== undefined) {
+    if (attendees) {
       finalMentees = parseFormArray<string>(attendees);
     } else {
-      const allMentees = await User.find({
-        course: mentorCourse.course,
-      }).select("_id");
-
-      finalMentees = allMentees.map((m) => m._id);
+      finalMentees = mentorData.mentees;
     }
 
     // 6. Update fields
@@ -936,10 +939,10 @@ export const createAssignment = async (req: Request, res: Response) => {
     );
 
     // 2. Resolve mentor course + mentees
-    const mentorCourse = await Mentor.findById(mentorId).select("course");
+    const mentorData = await Mentor.findById(mentorId).select("course mentees");
 
-    if (!mentorCourse?.course) {
-      return res.status(400).json({
+    if (!mentorData?.course) {
+      return res.status(404).json({
         status: "error",
         message: "Mentor course not found",
       });
@@ -955,11 +958,7 @@ export const createAssignment = async (req: Request, res: Response) => {
         status: "assigned",
       }));
     } else {
-      const allMentees = await User.find({
-        course: mentorCourse.course,
-      }).select("_id");
-
-      finalMentees = allMentees.map((m) => ({
+      finalMentees = mentorData.mentees.map((m) => ({
         user: m._id,
         status: "assigned",
       }));
@@ -976,7 +975,7 @@ export const createAssignment = async (req: Request, res: Response) => {
       dueDate: new Date(dueDate),
       week: category === "task" ? week : undefined,
       category,
-      course: mentorCourse.course,
+      course: mentorData.course,
       dueTime,
     });
 
