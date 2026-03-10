@@ -4,6 +4,7 @@ import {
   changeMenteeTrainer,
   fetchAllMentees,
   fetchMentors,
+  purchaseOverview,
 } from "../controllers/adminDashboardController.js";
 
 const adminDashboardRouter = express.Router();
@@ -11,7 +12,9 @@ const adminDashboardRouter = express.Router();
 adminDashboardRouter.get("/mentees", fetchAllMentees);
 adminDashboardRouter.get("/mentors/:course", fetchMentors);
 
-adminDashboardRouter.get("/mentees/assign", assignMenteeTrainer);
-adminDashboardRouter.get("/mentees/change", changeMenteeTrainer);
+adminDashboardRouter.get("/purchases", purchaseOverview);
+
+adminDashboardRouter.post("/mentees/assign", assignMenteeTrainer);
+adminDashboardRouter.post("/mentees/change", changeMenteeTrainer);
 
 export default adminDashboardRouter;
