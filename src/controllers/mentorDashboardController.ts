@@ -958,8 +958,8 @@ export const createAssignment = async (req: Request, res: Response) => {
         status: "assigned",
       }));
     } else {
-      finalMentees = mentorData.mentees.map((m) => ({
-        user: m._id,
+      finalMentees = mentorData.mentees.map((id) => ({
+        user: new Types.ObjectId(id),
         status: "assigned",
       }));
     }
@@ -1086,7 +1086,8 @@ export const editAssignment = async (req: Request, res: Response) => {
     );
 
     // 4. Resolve mentor course
-    const mentorCourse = await Mentor.findById(mentorId).select("course");
+    const mentorCourse =
+      await Mentor.findById(mentorId).select("course mentees");
     if (!mentorCourse?.course) {
       return res.status(400).json({
         status: "error",
@@ -1100,11 +1101,11 @@ export const editAssignment = async (req: Request, res: Response) => {
       status: "assigned" | "submitted" | "graded" | "overdue";
     }[];
 
-    if (mentees !== undefined) {
-      const existingMap = new Map(
-        assignment.mentees.map((m) => [m.user.toString(), m.status]),
-      );
+    const existingMap = new Map(
+      assignment.mentees.map((m) => [m.user.toString(), m.status]),
+    );
 
+    if (mentees !== undefined) {
       const menteeIds = parseFormArray<string>(mentees) ?? [];
 
       finalMentees = menteeIds.map((id) => ({
@@ -1112,17 +1113,9 @@ export const editAssignment = async (req: Request, res: Response) => {
         status: existingMap.get(id) ?? "assigned",
       }));
     } else {
-      const allMentees = await User.find({
-        course: mentorCourse.course,
-      }).select("_id");
-
-      const existingMap = new Map(
-        assignment.mentees.map((m) => [m.user.toString(), m.status]),
-      );
-
-      finalMentees = allMentees.map((m) => ({
-        user: m._id,
-        status: existingMap.get(m._id.toString()) ?? "assigned",
+      finalMentees = mentorCourse.mentees.map((id) => ({
+        user: new Types.ObjectId(id),
+        status: existingMap.get(id.toString()) ?? "assigned",
       }));
     }
 
@@ -1598,13 +1591,19 @@ export const fetchMenteesList = async (req: Request, res: Response) => {
       });
     }
 
-    const mentorCourse = await Mentor.findById(mentorId).select("course");
+    const mentor = await Mentor.findById(mentorId).select("mentees").populate({
+      path: "mentees",
+      select: "firstName lastName",
+    });
 
-    const mentees = await User.find({ course: mentorCourse?.course }).select(
-      "firstName lastName",
-    );
+    if (!mentor) {
+      return res.status(404).json({
+        status: "error",
+        message: "Mentor not found",
+      });
+    }
 
-    if (!mentees || mentees.length === 0) {
+    if (!mentor.mentees || mentor.mentees.length === 0) {
       return res.status(404).json({
         status: "error",
         message: "No mentees found for this mentor",
@@ -1614,7 +1613,7 @@ export const fetchMenteesList = async (req: Request, res: Response) => {
     return res.status(200).json({
       status: "success",
       data: {
-        mentees,
+        mentees: mentor.mentees,
       },
     });
   } catch (error: any) {
