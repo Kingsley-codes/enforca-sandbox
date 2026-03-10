@@ -1,19 +1,53 @@
 import { Request, Response } from "express";
 import User from "../models/userModel.js";
 import Mentor from "../models/mentorModel.js";
+import Payment from "../models/paymentModel.js";
 
-// export const purchaseOverview = async (req: Request, res: Response) => {
-//   try {
-//     const adminId = req.admin;
+export const purchaseOverview = async (req: Request, res: Response) => {
+  try {
+    const adminId = req.admin;
 
-//     if (!adminId) {
-//       return res.status(401).json({
-//         status: "error",
-//         message: "Unauthorized. Admin not authenticated",
-//       });
-//     }
-//   } catch (error: any) {}
-// };
+    if (!adminId) {
+      return res.status(401).json({
+        status: "error",
+        message: "Unauthorized. Admin not authenticated",
+      });
+    }
+
+    const payments = await Payment.find({ paymentStatus: "completed" })
+      .populate(
+        "user",
+        "firstName lastName email unusedCoins totalCoinsSpent course",
+      )
+      .sort({ createdAt: -1 });
+
+    const totalRevenue = payments.reduce(
+      (sum, payment) => sum + payment.amount,
+      0,
+    );
+
+    const totalCoins = payments.reduce(
+      (sum, payment) => sum + payment.coinsAmount!,
+      0,
+    );
+
+    return res.status(200).json({
+      status: "success",
+      data: {
+        totalRevenue,
+        totalCoins,
+        payments,
+      },
+    });
+  } catch (error: any) {
+    console.log("Error fetching purchase overview:", error);
+
+    return res.status(500).json({
+      status: "error",
+      message: error.message,
+    });
+  }
+};
 
 export const fetchAllMentees = async (req: Request, res: Response) => {
   try {

@@ -66,27 +66,23 @@ export const handleChargeSuccess = async (
       if (!payment) return null;
 
       if (payment.paymentType === "coins") {
-        let coinsToAdd = 0;
+        const coinPackages: Record<number, number> = {
+          5000: 5000,
+          10000: 12000,
+          15000: 20000,
+          35000: 50000,
+          60000: 100000,
+        };
 
-        switch (payment.amount) {
-          case 5000:
-            coinsToAdd = 5000;
-            break;
-          case 10000:
-            coinsToAdd = 12000;
-            break;
-          case 15000:
-            coinsToAdd = 20000;
-            break;
-          case 35000:
-            coinsToAdd = 50000;
-            break;
-          case 60000:
-            coinsToAdd = 100000;
-            break;
-        }
+        const coinsToAdd = coinPackages[payment.amount] || 0;
 
         if (coinsToAdd > 0) {
+          await Payment.updateOne(
+            { _id: payment._id },
+            { $set: { coinsAmount: coinsToAdd } },
+            { session },
+          );
+
           await User.updateOne(
             { _id: payment.mentee },
             { $inc: { unusedCoins: coinsToAdd } },
