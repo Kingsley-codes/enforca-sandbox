@@ -11,10 +11,10 @@ const sessionSchema = new Schema(
     title: {
       type: String,
     },
-    attended: {
-      type: Boolean,
-      default: false,
-    },
+    attendance: {
+      type: String,
+      enum: ["attended", "pending", "missed"],
+      default: "pending",},
     date: {
       type: Date,
     },

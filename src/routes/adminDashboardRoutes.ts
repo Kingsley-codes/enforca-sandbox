@@ -3,6 +3,8 @@ import {
   assignMenteeTrainer,
   changeMenteeTrainer,
   fetchAllMentees,
+  fetchLowCoinMentees,
+  fetchMenteesSessions,
   fetchMentors,
   purchaseOverview,
 } from "../controllers/adminDashboardController.js";
@@ -14,6 +16,8 @@ adminDashboardRouter.get("/mentees", adminAuthenticate, fetchAllMentees);
 adminDashboardRouter.get("/mentors/:course", adminAuthenticate, fetchMentors);
 
 adminDashboardRouter.get("/purchases", adminAuthenticate, purchaseOverview);
+adminDashboardRouter.get("/mentees/low-coins", adminAuthenticate, fetchLowCoinMentees);
+adminDashboardRouter.get("/mentees/sessions", adminAuthenticate, fetchMenteesSessions);
 
 adminDashboardRouter.post("/mentees/assign", adminAuthenticate, assignMenteeTrainer);
 adminDashboardRouter.post("/mentees/change", adminAuthenticate, changeMenteeTrainer);

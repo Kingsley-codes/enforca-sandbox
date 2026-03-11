@@ -12,32 +12,63 @@ export const purchaseOverview = async (req: Request, res: Response) => {
         status: "error",
         message: "Unauthorized. Admin not authenticated",
       });
-    } 
+    }
+
+    const { q, page = 1 } = req.query;
+
+    const limit = 10;
+    const currentPage = Number(page);
+    const skip = (currentPage - 1) * limit;
+
+    const searchFilter: any = {};
+
+    if (q) {
+      searchFilter.$or = [
+        { firstName: { $regex: q, $options: "i" } },
+        { lastName: { $regex: q, $options: "i" } },
+        { email: { $regex: q, $options: "i" } },
+      ];
+    }
 
     const payments = await Payment.find({ paymentStatus: "Completed" })
-      .populate(
-        "mentee",
-        "firstName lastName email unusedCoins totalCoinsSpent course",
-      )
-      .sort({ createdAt: -1 }); 
+      .populate({
+        path: "mentee",
+        select: "firstName lastName email unusedCoins totalCoinsSpent course",
+        match: q ? searchFilter : {},
+      })
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit);
 
+    // Remove payments where mentee didn't match search
+    const filteredPayments = payments.filter((p) => p.mentee);
 
-    const totalRevenue = payments.reduce(
+    const totalRevenue = filteredPayments.reduce(
       (sum, payment) => sum + payment.amount,
-      0,
+      0
     );
 
-    const totalCoins = payments.reduce(
-      (sum, payment) => sum + payment.coinsAmount!,
-      0,
+    const totalCoins = filteredPayments.reduce(
+      (sum, payment) => sum + (payment.coinsAmount || 0),
+      0
     );
+
+    const totalPayments = await Payment.countDocuments({
+      paymentStatus: "Completed",
+    });
 
     return res.status(200).json({
       status: "success",
+      results: filteredPayments.length,
+      pagination: {
+        total: totalPayments,
+        page: currentPage,
+        pages: Math.ceil(totalPayments / limit),
+      },
       data: {
         totalRevenue,
         totalCoins,
-        payments,
+        payments: filteredPayments,
       },
     });
   } catch (error: any) {
@@ -50,6 +81,7 @@ export const purchaseOverview = async (req: Request, res: Response) => {
   }
 };
 
+
 export const fetchAllMentees = async (req: Request, res: Response) => {
   try {
     const adminId = req.admin;
@@ -61,7 +93,7 @@ export const fetchAllMentees = async (req: Request, res: Response) => {
       });
     }
 
-    const { assignedStatus, page = 1 } = req.query;
+    const { q, assignedStatus, course, isPremium, status, page = 1 } = req.query;
 
     const limit = 10;
     const currentPage = Number(page);
@@ -73,6 +105,26 @@ export const fetchAllMentees = async (req: Request, res: Response) => {
       filter.assignedStatus = assignedStatus;
     }
 
+    if (course) {
+      filter.course = course;
+    }
+
+    if (isPremium) {
+      filter.isPremium = isPremium === "true";
+    }
+
+    if (status) {
+      filter.status = status;
+    }
+
+    if (q) {
+      filter.$or = [
+        { firstName: { $regex: q, $options: "i" } },
+        { lastName: { $regex: q, $options: "i" } },
+        { email: { $regex: q, $options: "i" } },
+      ];
+    }
+
     const [
       mentees,
       totalMentees,
@@ -82,7 +134,7 @@ export const fetchAllMentees = async (req: Request, res: Response) => {
     ] = await Promise.all([
       User.find(filter)
         .select(
-          "firstName lastName email assignedStatus course trainer createdAt",
+          "firstName lastName email assignedStatus status isPremium totalCoinsSpent unusedCoins course trainer createdAt",
         )
         .sort({ createdAt: -1 })
         .skip(skip)
@@ -272,6 +324,129 @@ export const fetchMentors = async (req: Request, res: Response) => {
     });
   } catch (error: any) {
     console.log("Error fetch mentors:", error);
+
+    return res.status(500).json({
+      status: "error",
+      message: error.message,
+    });
+  }
+};
+
+
+export const fetchMenteesSessions = async (req: Request, res: Response) => {
+  try {
+    const adminId = req.admin;
+    if (!adminId) {
+      return res.status(401).json({
+        status: "error",
+        message: "Unauthorized. Admin not authenticated",
+      });
+    }
+
+    const { q, course, page = 1 } = req.query;
+
+    const limit = 10;
+    const currentPage = Number(page);
+    const skip = (currentPage - 1) * limit;
+
+    const filter: any = {};
+
+    if (course) {
+      filter.course = course;
+    }
+
+    if (q) {
+      filter.$or = [
+        { firstName: { $regex: q, $options: "i" } },
+        { lastName: { $regex: q, $options: "i" } },
+        { email: { $regex: q, $options: "i" } },
+      ];
+    }
+
+    const mentees = await User.find(filter)
+      .select("firstName lastName email sessions")
+      .skip(skip)
+      .limit(limit);
+
+    const menteesWithCounts = mentees.map((mentee) => {
+      const sessions = mentee.sessions || [];
+
+      const totalSessions = sessions.length;
+      const attendedSessions = sessions.filter(
+        (s) => s.attendance === "attended"
+      ).length;
+
+      const missedSessions = sessions.filter(
+        (s) => s.attendance === "missed"
+      ).length;
+
+      return {
+        _id: mentee._id,
+        firstName: mentee.firstName,
+        lastName: mentee.lastName,
+        email: mentee.email,
+        sessions,
+        counts: {
+          totalSessions,
+          attendedSessions,
+          missedSessions,
+        },
+      };
+    });
+
+    const totalMentees = await User.countDocuments(filter);
+
+    return res.status(200).json({
+      status: "success",
+      results: menteesWithCounts.length,
+      pagination: {
+        total: totalMentees,
+        page: currentPage,
+        pages: Math.ceil(totalMentees / limit),
+      },
+      data: menteesWithCounts,
+    });
+  } catch (error: any) {
+    console.log("Error fetching mentee sessions:", error);
+    return res.status(500).json({
+      status: "error",
+      message: error.message,
+    });
+  }
+};
+
+export const fetchLowCoinMentees = async (req: Request, res: Response) => {
+  try {
+    const adminId = req.admin;
+
+    if (!adminId) {
+      return res.status(401).json({
+        status: "error",
+        message: "Unauthorized. Admin not authenticated",
+      });
+    }
+
+
+    const filter = {
+      unusedCoins: { $lt: 500 },
+    };
+
+    const users = await User.find(filter)
+      .select("firstName lastName email unusedCoins course")
+      .sort({ unusedCoins: 1 }); // lowest coins first
+
+    const totalUsers = await User.countDocuments(filter);
+
+    return res.status(200).json({
+      status: "success",
+      results: users.length,
+      pagination: {
+        total: totalUsers,
+       },
+      data: users,
+    });
+  } catch (error: any) {
+    console.log("Error fetching low coin users:", error);
 
     return res.status(500).json({
       status: "error",

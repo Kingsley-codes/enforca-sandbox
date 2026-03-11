@@ -264,7 +264,7 @@ export const joinSession = async (req: Request, res: Response) => {
       },
       {
         $set: {
-          "sessions.$.attended": true,
+          "sessions.$.attendance": "attended",
         },
         $inc: {
           unusedCoins: -500,
@@ -281,7 +281,7 @@ export const joinSession = async (req: Request, res: Response) => {
       );
 
       const alreadyAttendedNow = freshMentee?.sessions?.some(
-        (s) => s.session.toString() === sessionId && s.attended === true,
+        (s) => s.session.toString() === sessionId && s.attendance === "attended",
       );
 
       if (alreadyAttendedNow) {

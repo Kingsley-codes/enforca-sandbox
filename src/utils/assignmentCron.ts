@@ -1,53 +1,58 @@
 import cron from "node-cron";
 import Assignment from "../models/assignmentModel.js";
 import Session from "../models/sessionModel.js";
+import User from "../models/userModel.js";
+
 
 /**
- * Helper: build a real JS Date from assignment.dueDate + assignment.dueTime
- * dueTime is assumed to be in "HH:mm" format (e.g. "14:30")
- */
-function buildDueDateTime(dueDate: Date, dueTime: string) {
-  const [hour, minute] = dueTime.split(":").map(Number);
-
-  const d = new Date(dueDate);
-  d.setHours(hour || 0, minute || 0, 0, 0);
-
-  return d;
-}
-
-/**
+ * Assignment status update: assigned -> overdue
  * Runs every hour
  */
 cron.schedule("0 * * * *", async () => {
   try {
     const now = new Date();
 
-    // Only pull assignments that still have at least one "assigned" mentee
-    const assignments = await Assignment.find({
-      "mentees.status": "assigned",
-    }).select("_id dueDate dueTime");
+    // 1️⃣ Find overdue assignments directly in MongoDB
+    const assignments = await Assignment.aggregate([
+      {
+        $match: {
+          "mentees.status": "assigned",
+        },
+      },
+      {
+        $addFields: {
+          dueDateTime: {
+            $dateFromString: {
+              dateString: {
+                $concat: [
+                  { $dateToString: { format: "%Y-%m-%d", date: "$dueDate" } },
+                  "T",
+                  "$dueTime",
+                  ":00",
+                ],
+              },
+            },
+          },
+        },
+      },
+      {
+        $match: {
+          dueDateTime: { $lt: now },
+        },
+      },
+      {
+        $project: { _id: 1 },
+      },
+    ]);
 
-    const overdueAssignmentIds: string[] = [];
+    const overdueAssignmentIds = assignments.map((a) => a._id);
 
-    for (const assignment of assignments) {
-      const dueAt = buildDueDateTime(assignment.dueDate, assignment.dueTime);
+    if (!overdueAssignmentIds.length) return;
 
-      if (now > dueAt) {
-        overdueAssignmentIds.push(assignment._id.toString());
-      }
-    }
-
-    if (!overdueAssignmentIds.length) {
-      return;
-    }
-
-    /**
-     * Update ONLY mentees with status === "assigned"
-     */
+    // 2️⃣ Update only mentees whose status is still "assigned"
     const result = await Assignment.updateMany(
       {
         _id: { $in: overdueAssignmentIds },
-        "mentees.status": "assigned",
       },
       {
         $set: {
@@ -56,65 +61,91 @@ cron.schedule("0 * * * *", async () => {
       },
       {
         arrayFilters: [{ "m.status": "assigned" }],
-      },
+      }
     );
 
     console.log(
-      `[cron] Overdue check complete. Modified assignments: ${result.modifiedCount}`,
+      `[cron] Overdue check complete. Modified assignments: ${result.modifiedCount}`
     );
   } catch (err) {
     console.error("[cron] Overdue assignment check failed:", err);
   }
 });
 
-function buildSessionDateTime(date: Date, time: string) {
-  const [hour, minute] = time.split(":").map(Number);
 
-  const d = new Date(date);
-  d.setHours(hour || 0, minute || 0, 0);
-
-  return d;
-}
 
 /**
+ * Session status update: pending -> done
  * Runs every hour
  */
 cron.schedule("0 * * * *", async () => {
   try {
     const now = new Date();
 
-    const sessions = await Session.find({
-      status: "pending",
-    }).select("_id date time");
-
-    const doneSessionIds: string[] = [];
-
-    for (const session of sessions) {
-      const sessionDateTime = buildSessionDateTime(session.date, session.time);
-
-      if (now > sessionDateTime) {
-        doneSessionIds.push(session._id.toString());
+    // 1️⃣ Find sessions already past
+    const sessions = await Session.aggregate([
+      {
+        $match: { status: "pending" }
+      },
+      {
+        $addFields: {
+          sessionDateTime: {
+            $dateFromString: {
+              dateString: {
+                $concat: [
+                  { $dateToString: { format: "%Y-%m-%d", date: "$date" } },
+                  "T",
+                  "$time",
+                  ":00"
+                ]
+              }
+            }
+          }
+        }
+      },
+      {
+        $match: {
+          sessionDateTime: { $lt: now }
+        }
+      },
+      {
+        $project: { _id: 1 }
       }
-    }
+    ]);
 
-    if (!doneSessionIds.length) {
-      return;
-    }
+    const doneSessionIds = sessions.map((s) => s._id);
 
-    const result = await Session.updateMany(
+    if (!doneSessionIds.length) return;
+
+    // 2️⃣ Mark sessions done
+    const sessionResult = await Session.updateMany(
+      { _id: { $in: doneSessionIds } },
+      { $set: { status: "done" } }
+    );
+
+    // 3️⃣ Mark missed attendance
+    const userResult = await User.updateMany(
+      { "sessions.session": { $in: doneSessionIds } },
       {
-        _id: { $in: doneSessionIds },
-        status: "pending",
+        $set: {
+          "sessions.$[elem].attendance": "missed"
+        }
       },
       {
-        $set: { status: "done" },
-      },
+        arrayFilters: [
+          {
+            "elem.session": { $in: doneSessionIds },
+            "elem.attendance": "pending"
+          }
+        ]
+      }
     );
 
     console.log(
-      `[cron] Session status update complete. Modified sessions: ${result.modifiedCount}`,
+      `[cron] Sessions updated: ${sessionResult.modifiedCount}, Missed attendance updated: ${userResult.modifiedCount}`
     );
-  } catch (error: any) {
-    console.error("[cron] Session status update failed:", error);
+
+  } catch (error) {
+    console.error("[cron] Session update failed:", error);
   }
 });

@@ -695,3 +695,71 @@ export const changeAdminPassword = async (req: Request, res: Response) => {
     });
   }
 };
+
+
+export const adminRefreshToken = async (req: Request, res: Response) => {
+  try {
+    const refreshToken = req.cookies.refresh_token;
+    if (!refreshToken) {
+      return res.status(401).json({
+        status: "fail",
+        message: "Refresh token missing",
+      });
+    }
+
+    const isSecure = req.secure || req.headers["x-forwarded-proto"] === "https";
+
+    const refreshSecret = process.env.JWT_SECRET;
+
+    if (!refreshSecret) {
+      throw new Error("JWT_SECRET is not defined");
+    }
+
+    const decoded = jwt.verify(refreshToken, refreshSecret) as {
+      id: string;
+      type: string;
+    };
+
+    if (!decoded || decoded.type !== "refresh") {
+      res.clearCookie("refresh_token", {
+        httpOnly: true,
+        secure: isSecure,
+        sameSite: "none",
+      });
+
+      return res.status(401).json({
+        status: "fail",
+        message: "Invalid or expired refresh token",
+      });
+    }
+
+    const admin = await Admin.findById(decoded.id).select("-password");
+    if (!admin) {
+      return res.status(401).json({
+        status: "fail",
+        message: "Admin not found",
+      });
+    }
+
+    const newAccessToken = signAccessToken(admin._id.toString());
+
+    res.cookie("access_token", newAccessToken, {
+      httpOnly: true,
+      secure: isSecure,
+      sameSite: "none",
+      maxAge: 3 * 24 * 60 * 60 * 1000, // 3 days
+    });
+
+    return res.status(200).json({
+      status: "success",
+      data: { user: admin },
+    });
+  } catch (err: any) {
+    console.error("Admin refresh token error:", err);
+    return res.status(401).json({
+      status: "error",
+      message: "Failed to refresh access token",
+      details: err.message,
+    });
+  }
+};
