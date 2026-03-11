@@ -160,3 +160,34 @@ export const getDateRange = (
 
   return { start, end };
 };
+
+
+// Helper function to build date filter
+export const buildAdminDateFilter = (dateFilter: string, startDate?: string, endDate?: string) => {
+  const now = new Date();
+  let filter: any = {};
+
+  if (dateFilter === "today") {
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    filter = { $gte: start, $lte: now };
+  }
+
+  if (dateFilter === "week") {
+    const start = new Date();
+    start.setDate(start.getDate() - 7);
+    filter = { $gte: start, $lte: now };
+  }
+
+  if (dateFilter === "month") {
+    const start = new Date();
+    start.setMonth(start.getMonth() - 1);
+    filter = { $gte: start, $lte: now };
+  }
+
+  if (dateFilter === "custom" && startDate && endDate) {
+    filter = { $gte: new Date(startDate), $lte: new Date(endDate) };
+  }
+
+  return filter;
+};

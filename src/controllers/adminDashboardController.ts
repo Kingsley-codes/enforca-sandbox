@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import User from "../models/userModel.js";
 import Mentor from "../models/mentorModel.js";
 import Payment from "../models/paymentModel.js"; 
+import { buildAdminDateFilter } from "../helpers/filter.js";
 
 export const purchaseOverview = async (req: Request, res: Response) => {
   try {
@@ -457,7 +458,7 @@ export const fetchLowCoinMentees = async (req: Request, res: Response) => {
 };
 
 
-export const paymentAnalytics = async (req: Request, res: Response) => {
+export const transactionHistory = async (req: Request, res: Response) => {
   try {
     const adminId = req.admin;
 
@@ -468,13 +469,7 @@ export const paymentAnalytics = async (req: Request, res: Response) => {
       });
     }
 
-    const {
-      q,
-      filter = "all",
-      startDate,
-      endDate,
-      page = 1,
-    } = req.query as any;
+    const { q, date, startDate, endDate, page = 1 } = req.query as any;
 
     const limit = 10;
     const skip = (Number(page) - 1) * limit;
@@ -483,35 +478,12 @@ export const paymentAnalytics = async (req: Request, res: Response) => {
       paymentStatus: "Completed",
     };
 
-    const now = new Date();
-
-    // Date filters
-    if (filter === "today") {
-      const start = new Date();
-      start.setHours(0, 0, 0, 0);
-
-      match.createdAt = { $gte: start, $lte: now };
-    }
-
-    if (filter === "week") {
-      const start = new Date();
-      start.setDate(start.getDate() - 7);
-
-      match.createdAt = { $gte: start, $lte: now };
-    }
-
-    if (filter === "month") {
-      const start = new Date();
-      start.setMonth(start.getMonth() - 1);
-
-      match.createdAt = { $gte: start, $lte: now };
-    }
-
-    if (filter === "custom" && startDate && endDate) {
-      match.createdAt = {
-        $gte: new Date(startDate),
-        $lte: new Date(endDate),
-      };
+    // Apply date filter using helper
+    if (date) {
+      const dateRange = buildAdminDateFilter(date, startDate, endDate);
+      if (Object.keys(dateRange).length) {
+        match.createdAt = dateRange;
+      }
     }
 
     const pipeline: any[] = [
@@ -542,8 +514,8 @@ export const paymentAnalytics = async (req: Request, res: Response) => {
       });
     }
 
-      // Stats pipeline
-      pipeline.push({
+    // Stats + transactions
+    pipeline.push({
       $facet: {
         stats: [
           {

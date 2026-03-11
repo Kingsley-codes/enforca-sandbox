@@ -7,6 +7,7 @@ import {
   fetchMenteesSessions,
   fetchMentors,
   purchaseOverview,
+  transactionHistory,
 } from "../controllers/adminDashboardController.js";
 import { adminAuthenticate } from "../middleware/authenticationMiddleware.js";
 
@@ -16,6 +17,7 @@ adminDashboardRouter.get("/mentees", adminAuthenticate, fetchAllMentees);
 adminDashboardRouter.get("/mentors/:course", adminAuthenticate, fetchMentors);
 
 adminDashboardRouter.get("/purchases", adminAuthenticate, purchaseOverview);
+adminDashboardRouter.get("/transactions", adminAuthenticate, transactionHistory);
 adminDashboardRouter.get("/mentees/low-coins", adminAuthenticate, fetchLowCoinMentees);
 adminDashboardRouter.get("/mentees/sessions", adminAuthenticate, fetchMenteesSessions);
 
