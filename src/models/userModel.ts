@@ -110,7 +110,9 @@ const userSchema = new Schema(
       type: String,
     },
     trainer: {
-      type: String,
+      type: Schema.Types.ObjectId,
+      ref: "Mentor",
+      required: true,    
     },
     address: {
       type: String,

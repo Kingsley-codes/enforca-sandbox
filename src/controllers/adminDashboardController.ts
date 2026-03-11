@@ -136,6 +136,7 @@ export const fetchAllMentees = async (req: Request, res: Response) => {
         .select(
           "firstName lastName email assignedStatus status isPremium totalCoinsSpent unusedCoins course trainer createdAt",
         )
+        .populate("trainer", "firstName lastName")
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit),
@@ -216,7 +217,7 @@ export const assignMenteeTrainer = async (req: Request, res: Response) => {
       { new: true },
     );
 
-    existingUser.trainer = `${mentor.firstName} ${mentor.lastName}`;
+    existingUser.trainer = mentorId;
     existingUser.assignedStatus = "assigned";
     await existingUser.save();
 
@@ -284,7 +285,7 @@ export const changeMenteeTrainer = async (req: Request, res: Response) => {
     });
 
     // Update mentee record
-    mentee.trainer = `${newMentor.firstName} ${newMentor.lastName}`;
+    mentee.trainer = newMentorId;
     mentee.assignedStatus = "assigned";
 
     await mentee.save();
@@ -447,6 +448,154 @@ export const fetchLowCoinMentees = async (req: Request, res: Response) => {
     });
   } catch (error: any) {
     console.log("Error fetching low coin users:", error);
+
+    return res.status(500).json({
+      status: "error",
+      message: error.message,
+    });
+  }
+};
+
+
+export const paymentAnalytics = async (req: Request, res: Response) => {
+  try {
+    const adminId = req.admin;
+
+    if (!adminId) {
+      return res.status(401).json({
+        status: "error",
+        message: "Unauthorized",
+      });
+    }
+
+    const {
+      q,
+      filter = "all",
+      startDate,
+      endDate,
+      page = 1,
+    } = req.query as any;
+
+    const limit = 10;
+    const skip = (Number(page) - 1) * limit;
+
+    const match: any = {
+      paymentStatus: "Completed",
+    };
+
+    const now = new Date();
+
+    // Date filters
+    if (filter === "today") {
+      const start = new Date();
+      start.setHours(0, 0, 0, 0);
+
+      match.createdAt = { $gte: start, $lte: now };
+    }
+
+    if (filter === "week") {
+      const start = new Date();
+      start.setDate(start.getDate() - 7);
+
+      match.createdAt = { $gte: start, $lte: now };
+    }
+
+    if (filter === "month") {
+      const start = new Date();
+      start.setMonth(start.getMonth() - 1);
+
+      match.createdAt = { $gte: start, $lte: now };
+    }
+
+    if (filter === "custom" && startDate && endDate) {
+      match.createdAt = {
+        $gte: new Date(startDate),
+        $lte: new Date(endDate),
+      };
+    }
+
+    const pipeline: any[] = [
+      { $match: match },
+
+      {
+        $lookup: {
+          from: "users",
+          localField: "mentee",
+          foreignField: "_id",
+          as: "user",
+        },
+      },
+
+      { $unwind: "$user" },
+    ];
+
+    // Search filter
+    if (q) {
+      pipeline.push({
+        $match: {
+          $or: [
+            { "user.firstName": { $regex: q, $options: "i" } },
+            { "user.lastName": { $regex: q, $options: "i" } },
+            { "user.email": { $regex: q, $options: "i" } },
+          ],
+        },
+      });
+    }
+
+      // Stats pipeline
+      pipeline.push({
+      $facet: {
+        stats: [
+          {
+            $group: {
+              _id: null,
+              totalTransactions: { $sum: 1 },
+              totalRevenue: { $sum: "$amount" },
+              totalCoinsBought: { $sum: { $ifNull: ["$coinsAmount", 0] } },
+              averagePurchaseAmount: { $avg: "$amount" },
+            },
+          },
+        ],
+
+        transactions: [
+          {
+            $project: {
+              name: { $concat: ["$user.firstName", " ", "$user.lastName"] },
+              email: "$user.email",
+              coinsBought: "$coinsAmount",
+              value: "$amount",
+              paymentType: "$paymentType",
+              date: "$createdAt",
+            },
+          },
+
+          { $sort: { createdAt: -1 } },
+          { $skip: skip },
+          { $limit: limit },
+        ],
+      },
+    });
+
+    const result = await Payment.aggregate(pipeline);
+
+    const stats = result[0].stats[0] || {
+      totalTransactions: 0,
+      totalRevenue: 0,
+      totalCoinsBought: 0,
+      averagePurchaseAmount: 0,
+    };
+
+    const transactions = result[0].transactions;
+
+    return res.status(200).json({
+      status: "success",
+      stats,
+      results: transactions.length,
+      page: Number(page),
+      data: transactions,
+    });
+  } catch (error: any) {
+    console.log("Analytics error:", error);
 
     return res.status(500).json({
       status: "error",
