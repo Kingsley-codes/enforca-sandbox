@@ -628,3 +628,70 @@ export const adminLogin = async (
     });
   }
 };
+
+
+export const changeAdminPassword = async (req: Request, res: Response) => {
+  try {
+    const { email, newPassword } = req.body;
+
+    if (!email || !newPassword) {
+      return res.status(400).json({
+        status: "fail",
+        message: "Email, current password, and new password are required",
+      });
+    }
+
+    const admin = await Admin.findOne({ email }).select("+password");
+
+    if (!admin || !admin.password) {
+      return res.status(404).json({
+        status: "fail",
+        message: "Admin not found",
+      });
+    }
+
+    // const isCurrentPasswordValid = await bcrypt.compare(
+    //   currentPassword,
+    //   admin.password,
+    // );
+
+    // if (!isCurrentPasswordValid) {
+    //   return res.status(401).json({
+    //     status: "fail",
+    //     message: "Current password is incorrect",
+    //   });
+    // }
+
+    if (
+      !validator.isStrongPassword(newPassword, {
+        minLength: 8,
+        minUppercase: 1,
+        minSymbols: 1,
+        minNumbers: 1,
+      })
+    ) {
+      return res.status(400).json({
+        status: "fail",
+        message:
+          "New password must be at least 8 characters and include an uppercase letter, number, and symbol",
+      });
+    }
+
+    const hashedNewPassword = await bcrypt.hash(newPassword, 12);
+
+    admin.password = hashedNewPassword;
+    await admin.save();
+
+    return res.status(200).json({
+      status: "success",
+      message: "Password changed successfully",
+    });
+  } catch (err: any) {
+    console.error("Change admin password error:", err);
+    return res.status(500).json({
+      status: "error",
+      message: "Failed to change password",
+      details: err.message,
+    });
+  }
+};

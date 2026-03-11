@@ -6,15 +6,16 @@ import {
   fetchMentors,
   purchaseOverview,
 } from "../controllers/adminDashboardController.js";
+import { adminAuthenticate } from "../middleware/authenticationMiddleware.js";
 
 const adminDashboardRouter = express.Router();
 
-adminDashboardRouter.get("/mentees", fetchAllMentees);
-adminDashboardRouter.get("/mentors/:course", fetchMentors);
+adminDashboardRouter.get("/mentees", adminAuthenticate, fetchAllMentees);
+adminDashboardRouter.get("/mentors/:course", adminAuthenticate, fetchMentors);
 
-adminDashboardRouter.get("/purchases", purchaseOverview);
+adminDashboardRouter.get("/purchases", adminAuthenticate, purchaseOverview);
 
-adminDashboardRouter.post("/mentees/assign", assignMenteeTrainer);
-adminDashboardRouter.post("/mentees/change", changeMenteeTrainer);
+adminDashboardRouter.post("/mentees/assign", adminAuthenticate, assignMenteeTrainer);
+adminDashboardRouter.post("/mentees/change", adminAuthenticate, changeMenteeTrainer);
 
-export default adminDashboardRouter;
+export default adminDashboardRouter; 

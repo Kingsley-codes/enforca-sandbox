@@ -1,11 +1,16 @@
+import dns from "dns";
+
 import "dotenv/config";
 import app from "./app.js";
 import mongoose from "mongoose";
 import type { Request, Response } from "express";
 
-const dev = process.env.NODE_ENV !== "production";
+if (process.env.NODE_ENV === "development") {
+  dns.setServers(["8.8.8.8", "8.8.4.4"]);
+  dns.setDefaultResultOrder("ipv4first");
+}
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 4000;
 const MONGO_URI = process.env.MONGO_URI;
 
 if (!MONGO_URI) {

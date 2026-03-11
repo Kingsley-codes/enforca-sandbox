@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import User from "../models/userModel.js";
 import Mentor from "../models/mentorModel.js";
-import Payment from "../models/paymentModel.js";
+import Payment from "../models/paymentModel.js"; 
 
 export const purchaseOverview = async (req: Request, res: Response) => {
   try {
@@ -12,14 +12,15 @@ export const purchaseOverview = async (req: Request, res: Response) => {
         status: "error",
         message: "Unauthorized. Admin not authenticated",
       });
-    }
+    } 
 
-    const payments = await Payment.find({ paymentStatus: "completed" })
+    const payments = await Payment.find({ paymentStatus: "Completed" })
       .populate(
-        "user",
+        "mentee",
         "firstName lastName email unusedCoins totalCoinsSpent course",
       )
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 }); 
+
 
     const totalRevenue = payments.reduce(
       (sum, payment) => sum + payment.amount,

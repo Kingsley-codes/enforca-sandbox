@@ -8,6 +8,7 @@ import {
   changeMentorPassword,
   changeMenteePassword,
   adminLogin,
+  changeAdminPassword,
 } from "../controllers/userAuthControllers.js";
 
 const userAuthRouter = express.Router();
@@ -21,5 +22,6 @@ userAuthRouter.post("/mentors/refresh-token", mentorRefreshToken); // Mentor ref
 userAuthRouter.post("/mentors/change-password", changeMentorPassword); // Mentor change password route
 
 userAuthRouter.post("/admin/login", adminLogin); // Admin Login route
+userAuthRouter.post("/admin/change-password", changeAdminPassword); // Admin change password route
 
 export default userAuthRouter;
