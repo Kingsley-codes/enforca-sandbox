@@ -530,6 +530,8 @@ export const transactionHistory = async (req: Request, res: Response) => {
         ],
 
         transactions: [
+          { $sort: { createdAt: -1 } },
+
           {
             $project: {
               name: { $concat: ["$user.firstName", " ", "$user.lastName"] },
@@ -541,7 +543,6 @@ export const transactionHistory = async (req: Request, res: Response) => {
             },
           },
 
-          { $sort: { createdAt: -1 } },
           { $skip: skip },
           { $limit: limit },
         ],
@@ -562,8 +563,12 @@ export const transactionHistory = async (req: Request, res: Response) => {
     return res.status(200).json({
       status: "success",
       stats,
+      pagination: {
+        total: stats.totalTransactions,
+        page: Number(page),
+        pages: Math.ceil(stats.totalTransactions / limit),
+      },
       results: transactions.length,
-      page: Number(page),
       data: transactions,
     });
   } catch (error: any) {
