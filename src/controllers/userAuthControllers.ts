@@ -355,6 +355,13 @@ export const mentorLogin = async (
       });
     }
 
+    if (mentor.status === "suspended") {
+      return res.status(403).json({
+        status: "fail",
+        message: "Account suspended",
+      });
+    }
+
     // Verify both password and user.password are defined before comparing
     if (!password || !mentor.password) {
       return res.status(401).json({
@@ -546,6 +553,67 @@ export const changeMentorPassword = async (req: Request, res: Response) => {
   }
 };
 
+export const mentorAddPassword = async (req: Request, res: Response) => {
+  try {
+    const { email, newPassword } = req.body;
+
+    if (!email || !newPassword) {
+      return res.status(400).json({
+        status: "fail",
+        message: "Email and new password are required",
+      });
+    }
+
+    const mentor = await Mentor.findOne({ email });
+
+    if (!mentor) {
+      return res.status(404).json({
+        status: "fail",
+        message: "Mentor not found",
+      });
+    }
+
+    if (mentor.password !== undefined) {
+      return res.status(400).json({
+        status: "fail",
+        message: "Mentor already has password",
+      });
+    }
+
+    if (
+      !validator.isStrongPassword(newPassword, {
+        minLength: 8,
+        minUppercase: 1,
+        minSymbols: 1,
+        minNumbers: 1,
+      })
+    ) {
+      return res.status(400).json({
+        status: "fail",
+        message:
+          "New password must be at least 8 characters and include an uppercase letter, number, and symbol",
+      });
+    }
+
+    const hashedNewPassword = await bcrypt.hash(newPassword, 12);
+
+    mentor.password = hashedNewPassword;
+    await mentor.save();
+
+    return res.status(200).json({
+      status: "success",
+      message: "Password changed successfully",
+    });
+  } catch (err: any) {
+    console.error("Add mentor password error:", err);
+    return res.status(500).json({
+      status: "error",
+      message: "Failed to add mentor password",
+      details: err.message,
+    });
+  }
+};
+
 // Mentor Login
 export const adminLogin = async (
   req: Request<{}, {}, LoginRequestBody>,
@@ -629,7 +697,6 @@ export const adminLogin = async (
   }
 };
 
-
 export const changeAdminPassword = async (req: Request, res: Response) => {
   try {
     const { email, newPassword } = req.body;
@@ -695,7 +762,6 @@ export const changeAdminPassword = async (req: Request, res: Response) => {
     });
   }
 };
-
 
 export const adminRefreshToken = async (req: Request, res: Response) => {
   try {

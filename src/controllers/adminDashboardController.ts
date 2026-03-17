@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import User from "../models/userModel.js";
 import Mentor from "../models/mentorModel.js";
-import Payment from "../models/paymentModel.js"; 
+import Payment from "../models/paymentModel.js";
 import { buildAdminDateFilter } from "../helpers/filter.js";
 
 export const purchaseOverview = async (req: Request, res: Response) => {
@@ -46,12 +46,12 @@ export const purchaseOverview = async (req: Request, res: Response) => {
 
     const totalRevenue = filteredPayments.reduce(
       (sum, payment) => sum + payment.amount,
-      0
+      0,
     );
 
     const totalCoins = filteredPayments.reduce(
       (sum, payment) => sum + (payment.coinsAmount || 0),
-      0
+      0,
     );
 
     const totalPayments = await Payment.countDocuments({
@@ -82,7 +82,6 @@ export const purchaseOverview = async (req: Request, res: Response) => {
   }
 };
 
-
 export const fetchAllMentees = async (req: Request, res: Response) => {
   try {
     const adminId = req.admin;
@@ -94,7 +93,14 @@ export const fetchAllMentees = async (req: Request, res: Response) => {
       });
     }
 
-    const { q, assignedStatus, course, isPremium, status, page = 1 } = req.query;
+    const {
+      q,
+      assignedStatus,
+      course,
+      isPremium,
+      status,
+      page = 1,
+    } = req.query;
 
     const limit = 10;
     const currentPage = Number(page);
@@ -186,17 +192,16 @@ export const assignMenteeTrainer = async (req: Request, res: Response) => {
       });
     }
 
-    const { menteeId, mentorId } = req.body;
+    const { mentees, mentorId } = req.body;
 
-    const existingUser = await User.findById(menteeId);
-    const mentor = await Mentor.findById(mentorId);
-
-    if (!existingUser) {
-      return res.status(404).json({
+    if (!Array.isArray(mentees) || mentees.length === 0) {
+      return res.status(400).json({
         status: "error",
-        message: "Mentee not found",
+        message: "menteeIds must be a non-empty array",
       });
     }
+
+    const mentor = await Mentor.findById(mentorId);
 
     if (!mentor) {
       return res.status(404).json({
@@ -205,22 +210,43 @@ export const assignMenteeTrainer = async (req: Request, res: Response) => {
       });
     }
 
-    if (existingUser.course !== mentor.course) {
-      return res.status(400).json({
+    // Fetch all mentees
+    const allMentees = await User.find({ _id: { $in: mentees } });
+
+    if (allMentees.length !== mentees.length) {
+      return res.status(404).json({
         status: "error",
-        message: "Mentor and mentee must belong to the same course",
+        message: "One or more mentees not found",
       });
     }
 
-    await Mentor.findByIdAndUpdate(
-      mentorId,
-      { $push: { mentees: menteeId } },
-      { new: true },
+    // Ensure all mentees belong to same course as mentor
+    const invalidMentees = mentees.filter(
+      (mentee) => mentee.course !== mentor.course,
     );
 
-    existingUser.trainer = mentorId;
-    existingUser.assignedStatus = "assigned";
-    await existingUser.save();
+    if (invalidMentees.length > 0) {
+      return res.status(400).json({
+        status: "error",
+        message: "All mentees must belong to the same course as the mentor",
+      });
+    }
+
+    // Update mentor (avoid duplicates with $addToSet)
+    await Mentor.findByIdAndUpdate(mentorId, {
+      $addToSet: { mentees: { $each: mentees } },
+    });
+
+    // Update all mentees
+    await User.updateMany(
+      { _id: { $in: mentees } },
+      {
+        $set: {
+          trainer: mentorId,
+          assignedStatus: "assigned",
+        },
+      },
+    );
 
     return res.status(200).json({
       status: "success",
@@ -334,7 +360,6 @@ export const fetchMentors = async (req: Request, res: Response) => {
   }
 };
 
-
 export const fetchMenteesSessions = async (req: Request, res: Response) => {
   try {
     const adminId = req.admin;
@@ -375,11 +400,11 @@ export const fetchMenteesSessions = async (req: Request, res: Response) => {
 
       const totalSessions = sessions.length;
       const attendedSessions = sessions.filter(
-        (s) => s.attendance === "attended"
+        (s) => s.attendance === "attended",
       ).length;
 
       const missedSessions = sessions.filter(
-        (s) => s.attendance === "missed"
+        (s) => s.attendance === "missed",
       ).length;
 
       return {
@@ -428,7 +453,6 @@ export const fetchLowCoinMentees = async (req: Request, res: Response) => {
       });
     }
 
-
     const filter = {
       unusedCoins: { $lt: 500 },
     };
@@ -444,7 +468,7 @@ export const fetchLowCoinMentees = async (req: Request, res: Response) => {
       results: users.length,
       pagination: {
         total: totalUsers,
-       },
+      },
       data: users,
     });
   } catch (error: any) {
@@ -456,7 +480,6 @@ export const fetchLowCoinMentees = async (req: Request, res: Response) => {
     });
   }
 };
-
 
 export const transactionHistory = async (req: Request, res: Response) => {
   try {
@@ -573,6 +596,164 @@ export const transactionHistory = async (req: Request, res: Response) => {
     });
   } catch (error: any) {
     console.log("Analytics error:", error);
+
+    return res.status(500).json({
+      status: "error",
+      message: error.message,
+    });
+  }
+};
+
+export const addMentor = async (req: Request, res: Response) => {
+  try {
+    const adminId = req.admin;
+    const { firstName, lastName, email, course } = req.body;
+
+    if (!adminId) {
+      return res.status(401).json({
+        status: "error",
+        message: "Unauthorized",
+      });
+    }
+
+    // Check if mentor already exists
+    const existingMentor = await Mentor.findOne({ email });
+    if (existingMentor) {
+      return res.status(400).json({
+        status: "error",
+        message: "Mentor with this email already exists",
+      });
+    }
+
+    // Create new mentor
+    const newMentor = await Mentor.create({
+      firstName,
+      lastName,
+      email,
+      course,
+    });
+
+    return res.status(201).json({
+      status: "success",
+      data: newMentor,
+    });
+  } catch (error: any) {
+    console.log("Error adding mentor:", error);
+
+    return res.status(500).json({
+      status: "error",
+      message: error.message,
+    });
+  }
+};
+
+export const fetchMentorDetails = async (req: Request, res: Response) => {
+  try {
+    const adminId = req.admin;
+
+    if (!adminId) {
+      return res.status(401).json({
+        status: "error",
+        message: "Unauthorized",
+      });
+    }
+
+    const { mentorId } = req.params;
+
+    const mentor = await Mentor.findById(mentorId).populate({
+      path: "mentees",
+      select: "firstName lastName email",
+    });
+
+    if (!mentor) {
+      return res.status(404).json({
+        status: "error",
+        message: "Mentor not found",
+      });
+    }
+
+    return res.status(200).json({
+      status: "success",
+      data: mentor,
+    });
+  } catch (error: any) {
+    console.log("Error fetching mentor details:", error);
+
+    return res.status(500).json({
+      status: "error",
+      message: error.message,
+    });
+  }
+};
+
+export const suspendMentor = async (req: Request, res: Response) => {
+  try {
+    const adminId = req.admin;
+
+    if (!adminId) {
+      return res.status(401).json({
+        status: "error",
+        message: "Unauthorized",
+      });
+    }
+
+    const { mentorId } = req.params;
+
+    const mentor = await Mentor.findById(mentorId);
+    if (!mentor) {
+      return res.status(404).json({
+        status: "error",
+        message: "Mentor not found",
+      });
+    }
+
+    mentor.status = "suspended";
+    await mentor.save();
+
+    return res.status(200).json({
+      status: "success",
+      message: "Mentor suspended successfully",
+    });
+  } catch (error: any) {
+    console.log("Error suspending mentor:", error);
+
+    return res.status(500).json({
+      status: "error",
+      message: error.message,
+    });
+  }
+};
+
+export const activateMentor = async (req: Request, res: Response) => {
+  try {
+    const adminId = req.admin;
+
+    if (!adminId) {
+      return res.status(401).json({
+        status: "error",
+        message: "Unauthorized",
+      });
+    }
+
+    const { mentorId } = req.params;
+
+    const mentor = await Mentor.findById(mentorId);
+    if (!mentor) {
+      return res.status(404).json({
+        status: "error",
+        message: "Mentor not found",
+      });
+    }
+
+    mentor.status = "active";
+    await mentor.save();
+
+    return res.status(200).json({
+      status: "success",
+      message: "Mentor activated successfully",
+    });
+  } catch (error: any) {
+    console.log("Error activating mentor:", error);
 
     return res.status(500).json({
       status: "error",

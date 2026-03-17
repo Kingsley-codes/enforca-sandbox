@@ -47,6 +47,11 @@ const mentorSchema = new Schema(
       type: String,
       minlength: 8,
     },
+    status: {
+      type: String,
+      enum: ["active", "suspended"],
+      default: "active",
+    },
     mentees: [
       {
         type: Schema.Types.ObjectId,
