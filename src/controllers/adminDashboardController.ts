@@ -342,9 +342,15 @@ export const fetchMentors = async (req: Request, res: Response) => {
       });
     }
 
-    const { course } = req.params;
+    const { course } = req.query;
 
-    const mentors = await Mentor.find({ course: course });
+    const filter: any = {};
+
+    if (course) {
+      filter.course = course;
+    }
+
+    const mentors = await Mentor.find(filter).select("-password");
 
     return res.status(200).json({
       status: "success",

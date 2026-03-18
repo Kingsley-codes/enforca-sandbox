@@ -17,7 +17,7 @@ import { adminAuthenticate } from "../middleware/authenticationMiddleware.js";
 
 const adminDashboardRouter = express.Router();
 
-adminDashboardRouter.get("/mentors/:course", adminAuthenticate, fetchMentors);
+adminDashboardRouter.get("/mentors", adminAuthenticate, fetchMentors);
 adminDashboardRouter.post("/mentors/add", adminAuthenticate, addMentor);
 adminDashboardRouter.get(
   "/mentors/:mentorId",
