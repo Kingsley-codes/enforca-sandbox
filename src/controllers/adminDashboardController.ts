@@ -221,7 +221,7 @@ export const assignMenteeTrainer = async (req: Request, res: Response) => {
     }
 
     // Ensure all mentees belong to same course as mentor
-    const invalidMentees = mentees.filter(
+    const invalidMentees = allMentees.filter(
       (mentee) => mentee.course !== mentor.course,
     );
 
