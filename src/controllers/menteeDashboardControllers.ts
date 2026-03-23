@@ -181,7 +181,7 @@ export const fetchMySessions = async (req: Request, res: Response) => {
       attendees: menteeId,
       ...dateQuery,
     })
-      .select("-mentor -attendees -recordingLink")
+      .select("-mentor -attendees -recordingLink -meetingLink")
       .sort({ createdAt: -1 });
 
     return res.status(200).json({
@@ -258,7 +258,7 @@ export const joinSession = async (req: Request, res: Response) => {
         sessions: {
           $elemMatch: {
             session: session._id,
-            attended: false,
+            attendance: "pending",
           },
         },
       },
@@ -281,7 +281,8 @@ export const joinSession = async (req: Request, res: Response) => {
       );
 
       const alreadyAttendedNow = freshMentee?.sessions?.some(
-        (s) => s.session.toString() === sessionId && s.attendance === "attended",
+        (s) =>
+          s.session.toString() === sessionId && s.attendance === "attended",
       );
 
       if (alreadyAttendedNow) {
@@ -296,7 +297,7 @@ export const joinSession = async (req: Request, res: Response) => {
 
       return res.status(400).json({
         status: "error",
-        message: "Not enough coins",
+        message: "Something went wrong",
       });
     }
 
